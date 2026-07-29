@@ -1,0 +1,15 @@
+{
+  "seed": 42,
+  "total_clean_examples": 10,
+  "train_examples": 8,
+  "validation_examples": 1,
+  "test_examples": 1,
+  "source_vocabulary_size": 8,
+  "target_vocabulary_size": 9,
+  "vocabulary_built_from": "training split only",
+  "train_ratio": 0.8,
+  "validation_ratio": 0.1,
+  "test_ratio": 0.1,
+  "maximum_source_length": 120,
+  "maximum_target_length": 60
+}
