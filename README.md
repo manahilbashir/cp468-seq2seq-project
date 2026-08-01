@@ -1,13 +1,24 @@
-# CP468 AI Course Project: LSTM vs. LLM Sequence-to-Sequence Model
+# LSTM vs. LLM Sequence-to-Sequence Model
 
-**Course:** CP468 — Artificial Intelligence (Wilfrid Laurier University)  
-**Semester:** Spring 2026  
-**Team:** Seq2Seq Research Group  
-**Project Type:** Sequence-to-Sequence Modeling — LSTM vs. LLM
+**CP468 — Artificial Intelligence (Wilfrid Laurier University)** | Spring 2026   
+**Contributors:** Safdar, Farhan, Noah, Manahil, Morad
 
 **Task:** **Article Headline Generation**  
 > **Input:** A news article body (multiple sentences)  
 > **Output:** A concise, informative headline summarizing the article
+
+---
+## Model Architecture
+
+**LSTM Encoder-Decoder with Bahdanau Attention**
+
+- **Encoder:** Bidirectional LSTM
+- **Attention:** Bahdanau (additive) with padding masking
+- **Decoder:** Unidirectional LSTM, attends to encoder outputs at each step
+- **Training:** Teacher forcing with optional decay
+- **Inference:** Greedy decoding
+
+Built from scratch using only PyTorch standard layers (`nn.LSTM`, `nn.Embedding`, `nn.Linear`). No prebuilt seq2seq pipelines.
 
 ---
 
@@ -50,11 +61,11 @@ cp468-seq2seq-project/
 
 | Role | Member | Status | Deliverable |
 |---|---|---|---|
-| **Role 1:** Data Pipeline | *TBD* | ⚠️ **INCOMPLETE** | Real dataset, vocabularies, train/val/test splits |
-| **Role 2:** LSTM Seq2Seq | *You* | ✅ **COMPLETE** | `src/model.py`, `train.py` — built & tested |
-| **Role 3:** LLM Baseline | *TBD* | ⏳ **PENDING** | `llm_baseline.py` |
-| **Role 4:** Evaluation | *TBD* | ⏳ **PENDING** | Run `evaluate.py`, produce metrics + qualitative analysis |
-| **Role 5:** Report & Video | *TBD* | ⏳ **PENDING** | 5-page PDF report + 8-min demo video |
+| **Role 1:** Data Pipeline | Manahil | ⚠️ **INCOMPLETE** | Real dataset, vocabularies, train/val/test splits |
+| **Role 2:** LSTM Seq2Seq | Safdar | ✅ **COMPLETE** | `src/model.py`, `train.py` — built & tested |
+| **Role 3:** LLM Baseline | Morad | ⏳ **PENDING** | `llm_baseline.py` |
+| **Role 4:** Evaluation | Noah | ⏳ **PENDING** | Run `evaluate.py`, produce metrics + qualitative analysis |
+| **Role 5:** Report & Video | Farhan | ⏳ **PENDING** | 5-page PDF report + 8-min demo video |
 
 > **Note:** Role 1 must replace the placeholder dataset (`data/raw/dataset.csv` currently has only **10 examples**) with a real headline-generation corpus before any training, evaluation, or baseline comparison can proceed. See "Dataset Issue" below.
 
@@ -124,26 +135,9 @@ python evaluate.py \
 
 ## ⚠️ Dataset Issue
 
-**Current status:** `data/raw/dataset.csv` contains only **10 toy examples** (8 train / 1 val / 1 test). The preprocessing code works correctly, but the data itself is a placeholder. Vocabulary sizes are in single digits (8 source / 9 target tokens) instead of the thousands needed for a real model.
-
-**Role 1 must:**
 1. Replace the CSV with a real headline-generation dataset (e.g., [AG News](https://www.kaggle.com/datasets/amananandrai/ag-news-classification-dataset), [BBC News](https://www.kaggle.com/datasets/hgultekin/bbcnewsarchive), or [CNN/DailyMail](https://huggingface.co/datasets/cnn_dailymail))
 2. Re-run `python src/preprocess.py`
 3. Verify vocabulary sizes are in the thousands
-
----
-
-## Model Architecture
-
-**LSTM Encoder-Decoder with Bahdanau Attention**
-
-- **Encoder:** Bidirectional LSTM
-- **Attention:** Bahdanau (additive) with padding masking
-- **Decoder:** Unidirectional LSTM, attends to encoder outputs at each step
-- **Training:** Teacher forcing with optional decay
-- **Inference:** Greedy decoding
-
-Built from scratch using only PyTorch standard layers (`nn.LSTM`, `nn.Embedding`, `nn.Linear`). No prebuilt seq2seq pipelines.
 
 ---
 
