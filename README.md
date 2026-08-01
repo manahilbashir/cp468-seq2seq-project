@@ -1,147 +1,133 @@
-# LSTM vs. LLM Sequence-to-Sequence Model
+# CP468: LSTM vs LLM for Headline Generation
 
-**CP468 — Artificial Intelligence (Wilfrid Laurier University)** | Spring 2026   
-**Contributors:** Safdar, Farhan, Noah, Manahil, Morad
-
-**Task:** **Article Headline Generation**  
-> **Input:** A news article body (multiple sentences)  
-> **Output:** A concise, informative headline summarizing the article
-
----
-## Model Architecture
-
-**LSTM Encoder-Decoder with Bahdanau Attention**
-
-- **Encoder:** Bidirectional LSTM
-- **Attention:** Bahdanau (additive) with padding masking
-- **Decoder:** Unidirectional LSTM, attends to encoder outputs at each step
-- **Training:** Teacher forcing with optional decay
-- **Inference:** Greedy decoding
-
-Built from scratch using only PyTorch standard layers (`nn.LSTM`, `nn.Embedding`, `nn.Linear`). No prebuilt seq2seq pipelines.
+**Course:** CP468 — Artificial Intelligence · Wilfrid Laurier University · Spring 2026  
+**Team:** Safdar · Farhan · Noah · Manahil · Morad
 
 ---
 
-## Repository Structure
+## What this project is
 
-```
-cp468-seq2seq-project/
-├── data/
-│   ├── raw/
-│   │   └── dataset.csv              ← Raw dataset (article, headline pairs)
-│   └── processed/                   ← Preprocessed train/val/test + vocabularies
-│       ├── train.jsonl
-│       ├── validation.jsonl
-│       ├── test.jsonl
-│       ├── source_vocab.json
-│       ├── target_vocab.json
-│       └── metadata.json
-├── models/                          ← Saved model checkpoints
-├── results/                         ← Training curves, metrics, predictions
-├── scripts/
-│   └── test_dataset.py              ← Quick data pipeline smoke test
-├── src/
-│   ├── __init__.py
-│   ├── dataset.py                   ← PyTorch Dataset + collate (padding/masking)
-│   ├── model.py                     ← Encoder-Decoder + Bahdanau Attention
-│   ├── preprocess.py                ← Data cleaning, tokenization, vocab, splitting
-│   ├── tokenizer.py                 ← Text cleaning + regex tokenization
-│   ├── utils.py                     ← Reproducibility (set_seed)
-│   └── vocabulary.py                ← Vocabulary class
-├── train.py                         ← Training loop (Role 2)
-├── evaluate.py                      ← Inference + BLEU/ROUGE (Role 4)
-├── llm_baseline.py                  ← LLM API baseline (Role 3 — to be added)
-├── requirements.txt                 ← Python dependencies
-└── README.md                        ← This file
-```
+We take a **news article** and generate a **short headline**.
+
+| | |
+|---|---|
+| **Input** | Article body (many sentences) |
+| **Output** | One concise headline |
+
+We build **two systems** on the same task and compare them:
+
+1. **LSTM seq2seq (from scratch)** — bidirectional LSTM encoder → Bahdanau attention → LSTM decoder, trained only on our dataset  
+2. **LLM baseline** — a modern language model (API or local) prompted to write headlines on the **same test set**
+
+The goal is not to beat the LLM. It is to measure the gap, understand why it exists (capacity, pretraining, attention vs recurrence), and discuss trade-offs (cost, latency, control, offline use).
+
+**Course deliverables:** public GitHub repo · 5-page report · 8-minute demo video
 
 ---
 
-## Team Roles & Deliverables
+## Team roles
 
-| Role | Member | Status | Deliverable |
-|---|---|---|---|
-| **Role 1:** Data Pipeline | Manahil | ⚠️ **INCOMPLETE** | Real dataset, vocabularies, train/val/test splits |
-| **Role 2:** LSTM Seq2Seq | Safdar | ✅ **COMPLETE** | `src/model.py`, `train.py` — built & tested |
-| **Role 3:** LLM Baseline | Morad | ⏳ **PENDING** | `llm_baseline.py` |
-| **Role 4:** Evaluation | Noah | ⏳ **PENDING** | Run `evaluate.py`, produce metrics + qualitative analysis |
-| **Role 5:** Report & Video | Farhan | ⏳ **PENDING** | 5-page PDF report + 8-min demo video |
+| Role | Owner | Status | Owns |
+|------|-------|--------|------|
+| 1 · Data pipeline | Manahil | Incomplete | Real dataset, preprocess, vocab, train/val/test |
+| 2 · LSTM seq2seq | Safdar | Done | `src/model.py`, `train.py` |
+| 3 · LLM baseline | Morad | Pending | `llm_baseline.py` |
+| 4 · Evaluation | Noah | Pending | Metrics + qualitative analysis via `evaluate.py` |
+| 5 · Report & video | Farhan | Pending | PDF report + demo video |
 
-> **Note:** Role 1 must replace the placeholder dataset (`data/raw/dataset.csv` currently has only **10 examples**) with a real headline-generation corpus before any training, evaluation, or baseline comparison can proceed. See "Dataset Issue" below.
+**Blocker for Roles 2–4 training/eval:** Role 1 must replace the 10-example placeholder CSV with a real headline corpus, then re-run preprocessing. Role 2 model code is ready; it cannot be meaningfully trained until that data lands.
 
 ---
 
-## Setup & Installation
+## LSTM model (Role 2)
+
+Built with standard PyTorch layers only (`nn.LSTM`, `nn.Embedding`, `nn.Linear`) — no Fairseq / OpenNMT / HuggingFace Seq2SeqTrainer.
+
+- **Encoder:** bidirectional LSTM (+ pack/pad)  
+- **Attention:** Bahdanau (additive), padding masked  
+- **Decoder:** unidirectional LSTM with attention each step  
+- **Train:** teacher forcing (optional decay), grad clip, early stopping, checkpointing  
+- **Infer:** greedy decoding  
+
+---
+
+## Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/manahilbashir/cp468-seq2seq-project.git
 cd cp468-seq2seq-project
-
-# Install dependencies
 pip install -r requirements.txt
 
-# (Optional) Install evaluation libraries
+# Needed for evaluate.py (Role 4)
 pip install sacrebleu rouge-score
 ```
 
 ---
 
-## Usage
+## How to run
 
-### 1. Preprocess the Dataset
-
-> **Prerequisite:** Replace `data/raw/dataset.csv` with a real dataset first.
+### 1. Preprocess *(Role 1 — after real data is in place)*
 
 ```bash
 python src/preprocess.py
 ```
 
-### 2. Train the LSTM Seq2Seq Model
+Expects `data/raw/dataset.csv` with `source,target` columns (article, headline).
+
+### 2. Train LSTM *(Role 2)*
 
 ```bash
 python train.py \
-    --data-dir data/processed \
-    --results-dir results \
-    --embedding-dim 256 \
-    --hidden-dim 512 \
-    --num-layers 2 \
-    --dropout 0.3 \
-    --batch-size 32 \
-    --epochs 50 \
-    --learning-rate 0.001 \
-    --teacher-forcing-ratio 1.0 \
-    --teacher-forcing-decay 0.02 \
-    --clip-grad 1.0 \
-    --patience 7 \
-    --seed 42
+  --data-dir data/processed \
+  --results-dir results \
+  --embedding-dim 256 \
+  --hidden-dim 512 \
+  --num-layers 2 \
+  --dropout 0.3 \
+  --batch-size 32 \
+  --epochs 50 \
+  --learning-rate 0.001 \
+  --teacher-forcing-ratio 1.0 \
+  --teacher-forcing-decay 0.02 \
+  --clip-grad 1.0 \
+  --patience 7 \
+  --seed 42
 ```
 
-### 3. Evaluate the Model
+Writes `results/best_model.pt`, training curves, and config/history JSON.
+
+### 3. Evaluate LSTM *(Role 4)*
 
 ```bash
 python evaluate.py \
-    --checkpoint results/best_model.pt \
-    --data-dir data/processed \
-    --results-dir results \
-    --num-examples 10
+  --checkpoint results/best_model.pt \
+  --data-dir data/processed \
+  --results-dir results \
+  --num-examples 10
 ```
 
-### 4. Run LLM Baseline (Role 3)
+### 4. LLM baseline *(Role 3 — not implemented yet)*
 
-> *To be implemented by Role 3.*
+Will live in `llm_baseline.py` once Role 3 lands.
 
 ---
 
-## ⚠️ Dataset Issue
+## Repository layout
 
-1. Replace the CSV with a real headline-generation dataset (e.g., [AG News](https://www.kaggle.com/datasets/amananandrai/ag-news-classification-dataset), [BBC News](https://www.kaggle.com/datasets/hgultekin/bbcnewsarchive), or [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail))
-2. Re-run `python src/preprocess.py`
-3. Verify vocabulary sizes are in the thousands
+```
+data/raw/            Raw CSV (Role 1)
+data/processed/      Splits + vocabularies (Role 1)
+src/model.py         LSTM encoder–decoder + attention (Role 2)
+train.py             Training loop (Role 2)
+evaluate.py          BLEU / ROUGE + examples (Role 4)
+llm_baseline.py      LLM comparison (Role 3 — TBD)
+results/             Checkpoints, curves, metrics
+requirements.txt     Pinned dependencies
+```
 
 ---
 
 ## License
 
-Dataset license: **[TO BE FILLED BY ROLE 1]**  
-Code: For academic use in CP468 course project.
+- **Dataset:** to be filled by Role 1  
+- **Code:** academic use for CP468
