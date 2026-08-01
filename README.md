@@ -135,7 +135,7 @@ python evaluate.py \
 
 ## ⚠️ Dataset Issue
 
-1. Replace the CSV with a real headline-generation dataset (e.g., [AG News](https://www.kaggle.com/datasets/amananandrai/ag-news-classification-dataset), [BBC News](https://www.kaggle.com/datasets/hgultekin/bbcnewsarchive), or [CNN/DailyMail](https://huggingface.co/datasets/cnn_dailymail))
+1. Replace the CSV with a real headline-generation dataset (e.g., [AG News](https://www.kaggle.com/datasets/amananandrai/ag-news-classification-dataset), [BBC News](https://www.kaggle.com/datasets/hgultekin/bbcnewsarchive), or [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail))
 2. Re-run `python src/preprocess.py`
 3. Verify vocabulary sizes are in the thousands
 
