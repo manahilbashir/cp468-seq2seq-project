@@ -30,7 +30,7 @@ The goal is not to beat the LLM. It is to measure the gap, understand why it exi
 | Role | Owner | Status | Owns |
 |------|-------|--------|------|
 | 1 · Data pipeline | Manahil | Incomplete | Real dataset, preprocess, vocab, train/val/test |
-| 2 · LSTM seq2seq | Safdar | Done | `src/model.py`, `train.py` |
+| 2 · LSTM seq2seq | Safdar | Model done; train/tune after Role 1 | `src/model.py`, `train.py`, `scripts/finish_training.py` |
 | 3 · LLM baseline | Morad | Pending | `llm_baseline.py` |
 | 4 · Evaluation | Noah | Pending | Metrics + qualitative analysis via `evaluate.py` |
 | 5 · Report & video | Farhan | Pending | PDF report + demo video |
@@ -74,7 +74,37 @@ python src/preprocess.py
 
 Expects `data/raw/dataset.csv` with `source,target` columns (article, headline).
 
-### 2. Train LSTM *(Role 2)*
+---
+
+## After Role 1 cleans the dataset *(Role 2 — do this next)*
+
+Once the placeholder CSV is replaced with a real article→headline corpus:
+
+```bash
+# 1) Rebuild splits + vocabularies
+python src/preprocess.py
+
+# 2) Check data/processed/metadata.json
+#    train examples and vocab sizes should be large (not ~8)
+
+# 3) Train + light hyperparameter tuning (picks best val loss)
+python scripts/finish_training.py --preprocess
+
+# Faster smoke grid (2 configs, 15 epochs):
+python scripts/finish_training.py --quick --device cpu
+
+# GPU:
+python scripts/finish_training.py --device cuda
+```
+
+What `scripts/finish_training.py` does:
+
+- Stops if data still looks like the toy placeholder (unless `--allow-tiny-data`)
+- Trains a small grid (baseline / smaller LR / more dropout / narrower)
+- Saves runs under `results/tuning/<name>/`
+- Copies the best run to `results/best_model.pt`, `training_curves.png`, and `tuning_summary.json`
+
+Single-config training (manual):
 
 ```bash
 python train.py \
@@ -94,9 +124,7 @@ python train.py \
   --seed 42
 ```
 
-Writes `results/best_model.pt`, training curves, and config/history JSON.
-
-### 3. Evaluate LSTM *(Role 4)*
+### Evaluate LSTM *(Role 4)*
 
 ```bash
 python evaluate.py \
@@ -106,7 +134,7 @@ python evaluate.py \
   --num-examples 10
 ```
 
-### 4. LLM baseline *(Role 3 — not implemented yet)*
+### LLM baseline *(Role 3 — not implemented yet)*
 
 Will live in `llm_baseline.py` once Role 3 lands.
 
@@ -115,14 +143,15 @@ Will live in `llm_baseline.py` once Role 3 lands.
 ## Repository layout
 
 ```
-data/raw/            Raw CSV (Role 1)
-data/processed/      Splits + vocabularies (Role 1)
-src/model.py         LSTM encoder–decoder + attention (Role 2)
-train.py             Training loop (Role 2)
-evaluate.py          BLEU / ROUGE + examples (Role 4)
-llm_baseline.py      LLM comparison (Role 3 — TBD)
-results/             Checkpoints, curves, metrics
-requirements.txt     Pinned dependencies
+data/raw/                     Raw CSV (Role 1)
+data/processed/               Splits + vocabularies (Role 1)
+src/model.py                  LSTM encoder–decoder + attention (Role 2)
+train.py                      Single training run (Role 2)
+scripts/finish_training.py    Train + tune after real data (Role 2)
+evaluate.py                   BLEU / ROUGE + examples (Role 4)
+llm_baseline.py               LLM comparison (Role 3 — TBD)
+results/                      Best checkpoint, curves, tuning summary
+requirements.txt              Pinned dependencies
 ```
 
 ---
