@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local OS junk
+.DS_Store
+
+# Training artifacts (regenerate after Role 1 data lands)
+results/**/*.pt
+results/tuning/
+results/training_*.json
+results/training_*.png
+results/tuning_summary.json
+results/evaluation_*.json
+results/test_predictions.json
+results/qualitative_examples.md
