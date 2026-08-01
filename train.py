@@ -14,7 +14,6 @@ No high-level trainer wrappers used.
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -25,20 +24,6 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
-
-from dataset import Seq2SeqDataset, create_collate_function
-from model import Encoder, Decoder, Seq2Seq
-from utils import set_seed
-from vocabulary import Vocabulary
-import json
-import os
-import time
-from pathlib import Path
-
-import matplotlib.pyplot as plt
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
 
 from dataset import Seq2SeqDataset, create_collate_function
 from model import Encoder, Decoder, Seq2Seq
@@ -209,12 +194,6 @@ def train_epoch(model, dataloader, criterion, optimizer, device, teacher_forcing
         target_ids = batch["target_ids"].to(device)
         source_lengths = batch["source_lengths"].to(device)
 
-        # target_ids includes <bos> and <eos>
-        # Model predicts tokens after <bos>, so input is target_ids[:, :-1]
-        # But our model expects full target_ids and handles slicing internally
-        # Actually in our model.forward: outputs shape is (batch, tgt_seq_len - 1, vocab)
-        # target for loss should be target_ids[:, 1:] (skip <bos>)
-
         optimizer.zero_grad()
 
         outputs = model(
@@ -224,16 +203,11 @@ def train_epoch(model, dataloader, criterion, optimizer, device, teacher_forcing
             teacher_forcing_ratio=teacher_forcing_ratio,
         )
 
-        # outputs: (batch_size, tgt_seq_len - 1, vocab_size)
-        # targets: (batch_size, tgt_seq_len - 1)
+        # outputs: (batch, tgt_len - 1, vocab); targets skip <bos>
         targets = target_ids[:, 1:]
-
-        # Reshape for CrossEntropyLoss
-        # (batch_size * seq_len, vocab_size)
         outputs = outputs.view(-1, outputs.size(-1))
         targets = targets.reshape(-1)
 
-        # Ignore padding in loss computation
         loss = criterion(outputs, targets)
 
         loss.backward()
