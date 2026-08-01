@@ -65,6 +65,27 @@ class Encoder(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
+    def _combine_directions(self, state):
+        """
+        Concatenate forward and backward LSTM states per layer.
+
+        state shape: (num_layers * 2, batch_size, hidden_dim)
+        returns:     (num_layers, batch_size, hidden_dim * 2)
+        """
+        state = state.view(
+            self.num_layers, 2, state.size(1), self.hidden_dim
+        )
+        return torch.cat([state[:, 0, :, :], state[:, 1, :, :]], dim=2)
+
+    def project_hidden(self, state):
+        """Project bidirectional hidden state to unidirectional decoder space."""
+        return torch.tanh(self.hidden_projection(self._combine_directions(state)))
+
+    def project_cell(self, state):
+        """Project bidirectional cell state to unidirectional decoder space."""
+        # No tanh: cell states should keep unrestricted magnitude.
+        return self.cell_projection(self._combine_directions(state))
+
     def forward(self, source_ids, source_lengths):
         """
         Args:
@@ -88,81 +109,7 @@ class Encoder(nn.Module):
         )
 
         # packed_outputs: (batch_size, src_seq_len, hidden_dim * 2)
-        # hidden: (num_layers * 2, batch_size, hidden_dim)
-        # cell:   (num_layers * 2, batch_size, hidden_dim)
-        packed_outputs, (hidden, cell) = self.lstm(packed)
-
-        outputs, _ = nn.utils.rnn.pad_packed_sequence(
-            packed_outputs, batch_first=True
-        )
-
-        # Split bidirectional hidden/cell and project to decoder space
-        # hidden shape: (num_layers * 2, batch, hidden_dim)
-        # We need to combine forward and backward directions per layer
-        hidden = self._project_bidirectional_state(hidden)
-        cell = self._project_bidirectional_state(cell)
-
-        return outputs, hidden, cell
-
-    def _project_bidirectional_state(self, state):
-        """
-        Project bidirectional LSTM state to unidirectional decoder state.
-
-        state shape: (num_layers * 2, batch_size, hidden_dim)
-        We concatenate forward + backward per layer, then linear project.
-        """
-        # Reshape: (num_layers, 2, batch_size, hidden_dim)
-        state = state.view(
-            self.num_layers, 2, state.size(1), self.hidden_dim
-        )
-
-        # Concatenate forward and backward: (num_layers, batch_size, hidden_dim * 2)
-        state = torch.cat([state[:, 0, :, :], state[:, 1, :, :]], dim=2)
-
-        # Project to hidden_dim: (num_layers, batch_size, hidden_dim)
-        if state is hidden:  # Can't compare like this, use separate logic
-            pass
-        # Actually let's just handle this in forward
-        return state
-
-    def project_hidden(self, state):
-        """Project hidden state from bidirectional to unidirectional."""
-        state = state.view(
-            self.num_layers, 2, state.size(1), self.hidden_dim
-        )
-        state = torch.cat([state[:, 0, :, :], state[:, 1, :, :]], dim=2)
-        return torch.tanh(self.hidden_projection(state))
-
-    def project_cell(self, state):
-        """Project cell state from bidirectional to unidirectional."""
-        state = state.view(
-            self.num_layers, 2, state.size(1), self.hidden_dim
-        )
-        state = torch.cat([state[:, 0, :, :], state[:, 1, :, :]], dim=2)
-        return torch.tanh(self.cell_projection(state))
-
-    def forward(self, source_ids, source_lengths):
-        """
-        Args:
-            source_ids: (batch_size, src_seq_len) token IDs.
-            source_lengths: (batch_size,) actual lengths before padding.
-
-        Returns:
-            outputs: (batch_size, src_seq_len, hidden_dim * 2)
-            hidden:  (num_layers, batch_size, hidden_dim)
-            cell:    (num_layers, batch_size, hidden_dim)
-        """
-        # (batch_size, src_seq_len, embedding_dim)
-        embedded = self.dropout(self.embedding(source_ids))
-
-        # Pack padded sequence for efficient LSTM processing
-        packed = nn.utils.rnn.pack_padded_sequence(
-            embedded,
-            source_lengths.cpu(),
-            batch_first=True,
-            enforce_sorted=False,
-        )
-
+        # hidden/cell: (num_layers * 2, batch_size, hidden_dim)
         packed_outputs, (hidden, cell) = self.lstm(packed)
 
         outputs, _ = nn.utils.rnn.pad_packed_sequence(
