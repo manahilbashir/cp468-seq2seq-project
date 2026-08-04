@@ -9,129 +9,491 @@ from utils import set_seed
 from vocabulary import build_vocabulary
 
 
+# ============================================================
 # Reproducibility
+# ============================================================
+
 SEED = 42
 
-# File locations
+
+# ============================================================
+# File paths
+# ============================================================
+
 RAW_DATA_PATH = "data/raw/dataset.csv"
 OUTPUT_DIRECTORY = Path("data/processed")
 
-# Your dataset must use these two column names
+
+# ============================================================
+# Standardized column names
+# ============================================================
+
 SOURCE_COLUMN = "source"
 TARGET_COLUMN = "target"
 
+
+# ============================================================
 # Dataset split
+# ============================================================
+
 TRAIN_RATIO = 0.80
 VALIDATION_RATIO = 0.10
 TEST_RATIO = 0.10
 
+
+# ============================================================
 # Vocabulary settings
+# ============================================================
+
 MIN_WORD_FREQUENCY = 2
 MAX_VOCABULARY_SIZE = 30000
 
-# Length filtering
-MAX_SOURCE_LENGTH = 120
-MAX_TARGET_LENGTH = 60
 
+# ============================================================
+# Article / headline length settings
+# ============================================================
+
+# Article input
+MIN_SOURCE_LENGTH = 20
+MAX_SOURCE_LENGTH = 400
+
+# Headline output
+MIN_TARGET_LENGTH = 2
+MAX_TARGET_LENGTH = 30
+
+
+# ============================================================
+# Read CSV safely
+# ============================================================
+
+def read_dataset():
+    """
+    Read the raw CSV.
+
+    Some versions of the Kaggle News Summary dataset are not
+    encoded as UTF-8, so this tries multiple encodings.
+    """
+
+    print(f"Reading dataset from: {RAW_DATA_PATH}")
+
+    encodings = [
+        "utf-8",
+        "latin-1",
+        "cp1252",
+    ]
+
+    last_error = None
+
+    for encoding in encodings:
+        try:
+            print(f"Trying encoding: {encoding}")
+
+            data = pd.read_csv(
+                RAW_DATA_PATH,
+                encoding=encoding,
+                low_memory=False,
+            )
+
+            print(
+                f"Successfully loaded dataset "
+                f"using {encoding} encoding."
+            )
+
+            return data
+
+        except UnicodeDecodeError as error:
+            last_error = error
+
+            print(
+                f"{encoding} failed. "
+                "Trying another encoding..."
+            )
+
+    raise last_error
+
+
+# ============================================================
+# Detect dataset format
+# ============================================================
+
+def standardize_columns(data):
+    """
+    Convert different news dataset formats into:
+
+        source = article
+        target = headline
+    """
+
+    print("\nColumns found in dataset:")
+
+    for column in data.columns:
+        print(f" - {column}")
+
+    columns = set(data.columns)
+
+    # --------------------------------------------------------
+    # Already standardized
+    # --------------------------------------------------------
+
+    if {
+        "source",
+        "target",
+    }.issubset(columns):
+
+        print(
+            "\nDetected source/target format."
+        )
+
+        standardized = data[
+            [
+                "source",
+                "target",
+            ]
+        ].copy()
+
+        return standardized
+
+
+    # --------------------------------------------------------
+    # Kaggle News Summary
+    #
+    # Full article:
+    # ctext
+    #
+    # Headline:
+    # headlines
+    # --------------------------------------------------------
+
+    if {
+        "ctext",
+        "headlines",
+    }.issubset(columns):
+
+        print(
+            "\nDetected Kaggle News Summary "
+            "(ctext -> headlines)."
+        )
+
+        standardized = pd.DataFrame()
+
+        standardized["source"] = (
+            data["ctext"]
+        )
+
+        standardized["target"] = (
+            data["headlines"]
+        )
+
+        return standardized
+
+
+    # --------------------------------------------------------
+    # Kaggle news_summary_more.csv
+    #
+    # Short article text:
+    # text
+    #
+    # Headline:
+    # headlines
+    # --------------------------------------------------------
+
+    if {
+        "text",
+        "headlines",
+    }.issubset(columns):
+
+        print(
+            "\nDetected Kaggle News Summary "
+            "(text -> headlines)."
+        )
+
+        standardized = pd.DataFrame()
+
+        standardized["source"] = (
+            data["text"]
+        )
+
+        standardized["target"] = (
+            data["headlines"]
+        )
+
+        return standardized
+
+
+    # --------------------------------------------------------
+    # CNN / DailyMail
+    # --------------------------------------------------------
+
+    if {
+        "article",
+        "highlights",
+    }.issubset(columns):
+
+        print(
+            "\nDetected CNN/DailyMail "
+            "(article -> highlights)."
+        )
+
+        standardized = pd.DataFrame()
+
+        standardized["source"] = (
+            data["article"]
+        )
+
+        standardized["target"] = (
+            data["highlights"]
+        )
+
+        return standardized
+
+
+    # --------------------------------------------------------
+    # Article / headline generic format
+    # --------------------------------------------------------
+
+    if {
+        "article",
+        "headline",
+    }.issubset(columns):
+
+        print(
+            "\nDetected article/headline format."
+        )
+
+        standardized = pd.DataFrame()
+
+        standardized["source"] = (
+            data["article"]
+        )
+
+        standardized["target"] = (
+            data["headline"]
+        )
+
+        return standardized
+
+
+    raise ValueError(
+        "\nUnsupported dataset format.\n\n"
+        f"Columns found:\n{list(data.columns)}\n\n"
+        "Expected one of these formats:\n"
+        "source,target\n"
+        "ctext,headlines\n"
+        "text,headlines\n"
+        "article,headline\n"
+        "article,highlights"
+    )
+
+
+# ============================================================
+# Clean dataset
+# ============================================================
 
 def load_and_clean_data():
     """
-    Load the raw CSV dataset and clean invalid examples.
+    Load the dataset, clean text, remove invalid rows,
+    tokenize and filter by sequence length.
     """
 
-    data = pd.read_csv(RAW_DATA_PATH)
+    raw_data = read_dataset()
 
-    required_columns = {
-        SOURCE_COLUMN,
-        TARGET_COLUMN,
-    }
-
-    missing_columns = required_columns - set(data.columns)
-
-    if missing_columns:
-        raise ValueError(
-            f"Dataset is missing these columns: {missing_columns}. "
-            f"The CSV must contain '{SOURCE_COLUMN}' and "
-            f"'{TARGET_COLUMN}' columns."
-        )
-
-    # Keep only the two columns needed for seq2seq
-    data = data[
-        [
-            SOURCE_COLUMN,
-            TARGET_COLUMN,
-        ]
-    ].copy()
-
-    # Remove rows with missing values
-    data = data.dropna()
-
-    # Convert values to strings and remove extra spaces
-    data[SOURCE_COLUMN] = (
-        data[SOURCE_COLUMN]
-        .astype(str)
-        .str.strip()
+    print(
+        f"\nRaw dataset rows: "
+        f"{len(raw_data):,}"
     )
 
-    data[TARGET_COLUMN] = (
-        data[TARGET_COLUMN]
-        .astype(str)
-        .str.strip()
+    data = standardize_columns(
+        raw_data
     )
 
-    # Remove empty rows
-    data = data[
-        (data[SOURCE_COLUMN] != "")
-        & (data[TARGET_COLUMN] != "")
-    ]
+    # --------------------------------------------------------
+    # Remove missing article/headline values
+    # --------------------------------------------------------
 
-    # Remove duplicate source-target examples
-    data = data.drop_duplicates(
+    before = len(data)
+
+    data = data.dropna(
         subset=[
             SOURCE_COLUMN,
             TARGET_COLUMN,
         ]
     )
 
-    # Tokenize source and target text
+    print(
+        f"Removed missing rows: "
+        f"{before - len(data):,}"
+    )
+
+
+    # --------------------------------------------------------
+    # Convert values to strings
+    # --------------------------------------------------------
+
+    data[SOURCE_COLUMN] = (
+        data[SOURCE_COLUMN]
+        .astype(str)
+        .str.replace(
+            r"\s+",
+            " ",
+            regex=True,
+        )
+        .str.strip()
+    )
+
+    data[TARGET_COLUMN] = (
+        data[TARGET_COLUMN]
+        .astype(str)
+        .str.replace(
+            r"\s+",
+            " ",
+            regex=True,
+        )
+        .str.strip()
+    )
+
+
+    # --------------------------------------------------------
+    # Remove empty rows
+    # --------------------------------------------------------
+
+    before = len(data)
+
+    data = data[
+        (
+            data[SOURCE_COLUMN] != ""
+        )
+        &
+        (
+            data[TARGET_COLUMN] != ""
+        )
+    ]
+
+    print(
+        f"Removed empty rows: "
+        f"{before - len(data):,}"
+    )
+
+
+    # --------------------------------------------------------
+    # Remove duplicate articles
+    #
+    # This helps prevent identical articles from appearing
+    # in train, validation and test.
+    # --------------------------------------------------------
+
+    before = len(data)
+
+    data = data.drop_duplicates(
+        subset=[
+            SOURCE_COLUMN
+        ]
+    )
+
+    print(
+        f"Removed duplicate articles: "
+        f"{before - len(data):,}"
+    )
+
+
+    # --------------------------------------------------------
+    # Tokenize
+    # --------------------------------------------------------
+
+    print("\nTokenizing articles...")
+
     data["source_tokens"] = (
         data[SOURCE_COLUMN]
         .apply(tokenize)
     )
+
+    print("Tokenizing headlines...")
 
     data["target_tokens"] = (
         data[TARGET_COLUMN]
         .apply(tokenize)
     )
 
-    # Remove examples that are too short or too long
-    data = data[
+
+    # --------------------------------------------------------
+    # Calculate lengths
+    # --------------------------------------------------------
+
+    data["source_length"] = (
         data["source_tokens"]
         .apply(len)
+    )
+
+    data["target_length"] = (
+        data["target_tokens"]
+        .apply(len)
+    )
+
+
+    # --------------------------------------------------------
+    # Filter articles
+    # --------------------------------------------------------
+
+    before = len(data)
+
+    data = data[
+        data["source_length"]
         .between(
-            1,
+            MIN_SOURCE_LENGTH,
             MAX_SOURCE_LENGTH,
         )
     ]
 
+    print(
+        f"Removed articles outside "
+        f"{MIN_SOURCE_LENGTH}-"
+        f"{MAX_SOURCE_LENGTH} tokens: "
+        f"{before - len(data):,}"
+    )
+
+
+    # --------------------------------------------------------
+    # Filter headlines
+    # --------------------------------------------------------
+
+    before = len(data)
+
     data = data[
-        data["target_tokens"]
-        .apply(len)
+        data["target_length"]
         .between(
-            1,
+            MIN_TARGET_LENGTH,
             MAX_TARGET_LENGTH,
         )
     ]
 
-    return data.reset_index(drop=True)
+    print(
+        f"Removed headlines outside "
+        f"{MIN_TARGET_LENGTH}-"
+        f"{MAX_TARGET_LENGTH} tokens: "
+        f"{before - len(data):,}"
+    )
 
+
+    data = data.reset_index(
+        drop=True
+    )
+
+    if len(data) == 0:
+        raise ValueError(
+            "No usable examples remain after cleaning."
+        )
+
+    return data
+
+
+# ============================================================
+# Split dataset
+# ============================================================
 
 def split_data(data):
     """
-    Split examples into train, validation, and test sets.
+    Split the dataset BEFORE building the vocabulary.
 
-    This happens before vocabulary construction to prevent
-    validation and test data leakage.
+    This prevents validation/test vocabulary leakage.
     """
 
     total_ratio = (
@@ -140,36 +502,84 @@ def split_data(data):
         + TEST_RATIO
     )
 
-    if abs(total_ratio - 1.0) > 0.000001:
+    if abs(
+        total_ratio - 1.0
+    ) > 0.000001:
+
         raise ValueError(
-            "Train, validation, and test ratios must add to 1.0."
+            "Train, validation and test ratios "
+            "must add to 1.0."
         )
 
-    train_data, temporary_data = train_test_split(
-        data,
-        test_size=VALIDATION_RATIO + TEST_RATIO,
-        random_state=SEED,
-        shuffle=True,
+
+    if len(data) < 100:
+        print(
+            "\nWARNING: fewer than 100 usable examples."
+        )
+
+
+    # --------------------------------------------------------
+    # First split:
+    #
+    # 80% train
+    # 20% temporary
+    # --------------------------------------------------------
+
+    train_data, temporary_data = (
+        train_test_split(
+            data,
+            test_size=(
+                VALIDATION_RATIO
+                + TEST_RATIO
+            ),
+            random_state=SEED,
+            shuffle=True,
+        )
     )
+
+
+    # --------------------------------------------------------
+    # Split temporary set equally:
+    #
+    # 10% validation
+    # 10% test
+    # --------------------------------------------------------
 
     relative_test_ratio = (
         TEST_RATIO
-        / (VALIDATION_RATIO + TEST_RATIO)
+        /
+        (
+            VALIDATION_RATIO
+            + TEST_RATIO
+        )
     )
 
-    validation_data, test_data = train_test_split(
-        temporary_data,
-        test_size=relative_test_ratio,
-        random_state=SEED,
-        shuffle=True,
+    validation_data, test_data = (
+        train_test_split(
+            temporary_data,
+            test_size=relative_test_ratio,
+            random_state=SEED,
+            shuffle=True,
+        )
     )
+
 
     return (
-        train_data.reset_index(drop=True),
-        validation_data.reset_index(drop=True),
-        test_data.reset_index(drop=True),
+        train_data.reset_index(
+            drop=True
+        ),
+        validation_data.reset_index(
+            drop=True
+        ),
+        test_data.reset_index(
+            drop=True
+        ),
     )
 
+
+# ============================================================
+# Save processed split
+# ============================================================
 
 def save_processed_split(
     data,
@@ -178,7 +588,7 @@ def save_processed_split(
     target_vocabulary,
 ):
     """
-    Save one processed dataset split as a JSONL file.
+    Convert text into token IDs and save as JSONL.
     """
 
     with open(
@@ -188,17 +598,38 @@ def save_processed_split(
     ) as file:
 
         for _, row in data.iterrows():
+
+            source_tokens = (
+                row["source_tokens"]
+            )
+
+            target_tokens = (
+                row["target_tokens"]
+            )
+
             example = {
-                "source": row[SOURCE_COLUMN],
-                "target": row[TARGET_COLUMN],
-                "source_tokens": row["source_tokens"],
-                "target_tokens": row["target_tokens"],
-                "source_ids": source_vocabulary.encode(
-                    row["source_tokens"]
-                ),
-                "target_ids": target_vocabulary.encode(
-                    row["target_tokens"]
-                ),
+
+                "source":
+                    row[SOURCE_COLUMN],
+
+                "target":
+                    row[TARGET_COLUMN],
+
+                "source_tokens":
+                    source_tokens,
+
+                "target_tokens":
+                    target_tokens,
+
+                "source_ids":
+                    source_vocabulary.encode(
+                        source_tokens
+                    ),
+
+                "target_ids":
+                    target_vocabulary.encode(
+                        target_tokens
+                    ),
             }
 
             file.write(
@@ -210,52 +641,187 @@ def save_processed_split(
             )
 
 
+# ============================================================
+# Main preprocessing pipeline
+# ============================================================
+
 def main():
-    """
-    Run the complete preprocessing pipeline.
-    """
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        "ARTICLE HEADLINE GENERATION PREPROCESSING"
+    )
+
+    print(
+        "=" * 60
+    )
+
+
+    # --------------------------------------------------------
+    # Reproducibility
+    # --------------------------------------------------------
 
     set_seed(SEED)
+
+
+    # --------------------------------------------------------
+    # Create output directory
+    # --------------------------------------------------------
 
     OUTPUT_DIRECTORY.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    print("Loading and cleaning dataset...")
+
+    # --------------------------------------------------------
+    # Load / clean
+    # --------------------------------------------------------
+
+    print(
+        "\nLoading and cleaning dataset..."
+    )
 
     data = load_and_clean_data()
 
+
     print(
-        f"Clean examples found: {len(data)}"
+        "\n"
+        + "=" * 60
     )
 
     print(
-        "Creating train, validation, and test splits..."
+        "CLEAN DATASET SUMMARY"
+    )
+
+    print(
+        "=" * 60
+    )
+
+
+    print(
+        f"Clean examples: "
+        f"{len(data):,}"
+    )
+
+    print(
+        f"Average article length: "
+        f"{data['source_length'].mean():.2f} tokens"
+    )
+
+    print(
+        f"Average headline length: "
+        f"{data['target_length'].mean():.2f} tokens"
+    )
+
+    print(
+        f"Longest retained article: "
+        f"{data['source_length'].max()} tokens"
+    )
+
+    print(
+        f"Longest retained headline: "
+        f"{data['target_length'].max()} tokens"
+    )
+
+
+    # --------------------------------------------------------
+    # Split
+    # --------------------------------------------------------
+
+    print(
+        "\nCreating train / validation / test splits..."
     )
 
     (
         train_data,
         validation_data,
         test_data,
-    ) = split_data(data)
+    ) = split_data(
+        data
+    )
+
 
     print(
-        "Building source and target vocabularies "
-        "from training data only..."
+        f"\nTrain examples: "
+        f"{len(train_data):,}"
     )
 
-    source_vocabulary = build_vocabulary(
-        train_data["source_tokens"].tolist(),
-        min_frequency=MIN_WORD_FREQUENCY,
-        max_size=MAX_VOCABULARY_SIZE,
+    print(
+        f"Validation examples: "
+        f"{len(validation_data):,}"
     )
 
-    target_vocabulary = build_vocabulary(
-        train_data["target_tokens"].tolist(),
-        min_frequency=MIN_WORD_FREQUENCY,
-        max_size=MAX_VOCABULARY_SIZE,
+    print(
+        f"Test examples: "
+        f"{len(test_data):,}"
     )
+
+
+    # --------------------------------------------------------
+    # Vocabulary
+    #
+    # IMPORTANT:
+    # TRAINING DATA ONLY
+    # --------------------------------------------------------
+
+    print(
+        "\nBuilding source vocabulary "
+        "from TRAINING DATA ONLY..."
+    )
+
+    source_vocabulary = (
+        build_vocabulary(
+            train_data[
+                "source_tokens"
+            ].tolist(),
+            min_frequency=(
+                MIN_WORD_FREQUENCY
+            ),
+            max_size=(
+                MAX_VOCABULARY_SIZE
+            ),
+        )
+    )
+
+
+    print(
+        "Building target vocabulary "
+        "from TRAINING DATA ONLY..."
+    )
+
+    target_vocabulary = (
+        build_vocabulary(
+            train_data[
+                "target_tokens"
+            ].tolist(),
+            min_frequency=(
+                MIN_WORD_FREQUENCY
+            ),
+            max_size=(
+                MAX_VOCABULARY_SIZE
+            ),
+        )
+    )
+
+
+    print(
+        f"\nSource vocabulary size: "
+        f"{len(source_vocabulary):,}"
+    )
+
+    print(
+        f"Target vocabulary size: "
+        f"{len(target_vocabulary):,}"
+    )
+
+
+    # --------------------------------------------------------
+    # Save vocabulary
+    # --------------------------------------------------------
 
     source_vocabulary.save(
         OUTPUT_DIRECTORY
@@ -267,69 +833,189 @@ def main():
         / "target_vocab.json"
     )
 
-    print("Saving processed dataset splits...")
+
+    # --------------------------------------------------------
+    # Save train
+    # --------------------------------------------------------
+
+    print(
+        "\nSaving training data..."
+    )
 
     save_processed_split(
         train_data,
-        OUTPUT_DIRECTORY / "train.jsonl",
+        OUTPUT_DIRECTORY
+        / "train.jsonl",
         source_vocabulary,
         target_vocabulary,
+    )
+
+
+    # --------------------------------------------------------
+    # Save validation
+    # --------------------------------------------------------
+
+    print(
+        "Saving validation data..."
     )
 
     save_processed_split(
         validation_data,
-        OUTPUT_DIRECTORY / "validation.jsonl",
+        OUTPUT_DIRECTORY
+        / "validation.jsonl",
         source_vocabulary,
         target_vocabulary,
+    )
+
+
+    # --------------------------------------------------------
+    # Save test
+    # --------------------------------------------------------
+
+    print(
+        "Saving test data..."
     )
 
     save_processed_split(
         test_data,
-        OUTPUT_DIRECTORY / "test.jsonl",
+        OUTPUT_DIRECTORY
+        / "test.jsonl",
         source_vocabulary,
         target_vocabulary,
     )
 
+
+    # --------------------------------------------------------
+    # Metadata
+    # --------------------------------------------------------
+
     metadata = {
-        "seed": SEED,
-        "total_clean_examples": len(data),
-        "train_examples": len(train_data),
-        "validation_examples": len(validation_data),
-        "test_examples": len(test_data),
-        "source_vocabulary_size": len(
-            source_vocabulary
-        ),
-        "target_vocabulary_size": len(
-            target_vocabulary
-        ),
-        "vocabulary_built_from": (
-            "training split only"
-        ),
-        "train_ratio": TRAIN_RATIO,
-        "validation_ratio": VALIDATION_RATIO,
-        "test_ratio": TEST_RATIO,
-        "maximum_source_length": (
-            MAX_SOURCE_LENGTH
-        ),
-        "maximum_target_length": (
-            MAX_TARGET_LENGTH
-        ),
+
+        "task":
+            "article headline generation",
+
+        "seed":
+            SEED,
+
+        "dataset":
+            "Kaggle News Summary",
+
+        "dataset_source":
+            "https://www.kaggle.com/datasets/"
+            "sunnysai12345/news-summary",
+
+        "dataset_license":
+            "GPL-2.0",
+
+        "raw_dataset_path":
+            RAW_DATA_PATH,
+
+        "total_clean_examples":
+            len(data),
+
+        "train_examples":
+            len(train_data),
+
+        "validation_examples":
+            len(validation_data),
+
+        "test_examples":
+            len(test_data),
+
+        "train_ratio":
+            TRAIN_RATIO,
+
+        "validation_ratio":
+            VALIDATION_RATIO,
+
+        "test_ratio":
+            TEST_RATIO,
+
+        "source_vocabulary_size":
+            len(source_vocabulary),
+
+        "target_vocabulary_size":
+            len(target_vocabulary),
+
+        "vocabulary_built_from":
+            "training split only",
+
+        "minimum_source_length":
+            MIN_SOURCE_LENGTH,
+
+        "maximum_source_length":
+            MAX_SOURCE_LENGTH,
+
+        "minimum_target_length":
+            MIN_TARGET_LENGTH,
+
+        "maximum_target_length":
+            MAX_TARGET_LENGTH,
+
+        "average_source_length":
+            float(
+                data[
+                    "source_length"
+                ].mean()
+            ),
+
+        "average_target_length":
+            float(
+                data[
+                    "target_length"
+                ].mean()
+            ),
     }
 
+
+    metadata_path = (
+        OUTPUT_DIRECTORY
+        / "metadata.json"
+    )
+
+
     with open(
-        OUTPUT_DIRECTORY / "metadata.json",
+        metadata_path,
         "w",
         encoding="utf-8",
     ) as file:
+
         json.dump(
             metadata,
             file,
             indent=2,
         )
 
-    print("Preprocessing completed successfully.")
-    print(json.dumps(metadata, indent=2))
 
+    # --------------------------------------------------------
+    # Final output
+    # --------------------------------------------------------
+
+    print(
+        "\n"
+        + "=" * 60
+    )
+
+    print(
+        "PREPROCESSING COMPLETED SUCCESSFULLY"
+    )
+
+    print(
+        "=" * 60
+    )
+
+
+    print(
+        json.dumps(
+            metadata,
+            indent=2,
+        )
+    )
+
+
+# ============================================================
+# Run
+# ============================================================
 
 if __name__ == "__main__":
     main()
