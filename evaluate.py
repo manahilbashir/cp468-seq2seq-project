@@ -129,11 +129,14 @@ def compute_metrics(results):
         print("Install with: pip install sacrebleu rouge-score")
         return None
 
-    references = [[r["reference"]] for r in results]
+    reference_texts = [r["reference"] for r in results]
     predictions = [r["prediction"] for r in results]
 
-    # BLEU
-    bleu = corpus_bleu(predictions, references)
+    # BLEU — sacrebleu expects references shaped as a list of reference
+    # *sets* (each itself a per-example list), not a per-example list of
+    # single-reference lists. With only one reference per example this is
+    # a single-element outer list wrapping all reference texts in order.
+    bleu = corpus_bleu(predictions, [reference_texts])
 
     # ROUGE
     scorer = rouge_scorer.RougeScorer(
@@ -141,8 +144,8 @@ def compute_metrics(results):
     )
     rouge_scores = {"rouge1": [], "rouge2": [], "rougeL": []}
 
-    for ref, pred in zip(references, predictions):
-        scores = scorer.score(ref[0], pred)
+    for ref, pred in zip(reference_texts, predictions):
+        scores = scorer.score(ref, pred)
         for key in rouge_scores:
             rouge_scores[key].append(scores[key].fmeasure)
 

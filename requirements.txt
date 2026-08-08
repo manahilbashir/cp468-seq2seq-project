@@ -1,21 +1,52 @@
-filelock==3.32.0
-fsspec==2026.7.0
+# Pinned to versions actually verified to install and run the full
+# pipeline (preprocess -> train -> evaluate -> llm_baseline) end to end.
+# Regenerate with: pip install -r requirements.txt && pip list --format=freeze
+
+# Core
+torch==2.8.0
+numpy==2.0.2
+pandas==2.3.3
+scikit-learn==1.6.1
+scipy==1.13.1
+matplotlib==3.9.4
+tqdm==4.70.0
+
+# Evaluation (evaluate.py)
+sacrebleu==2.6.0
+rouge_score==0.1.2
+nltk==3.9.2
+
+# LLM baseline (llm_baseline.py)
+certifi==2026.7.22
+
+# Transitive dependencies pinned for reproducibility
+absl-py==2.3.1
+click==8.1.8
+colorama==0.4.6
+contourpy==1.3.0
+cycler==0.12.1
+filelock==3.19.1
+fonttools==4.60.2
+fsspec==2025.10.0
+importlib_resources==6.5.2
 Jinja2==3.1.6
 joblib==1.5.3
+kiwisolver==1.4.7
+lxml==6.1.1
 MarkupSafe==3.0.3
-matplotlib==3.10.8
 mpmath==1.3.0
-narwhals==2.24.0
-networkx==3.6.1
-numpy==2.4.6
-pandas==3.0.5
+networkx==3.2.1
+packaging==26.3
+pillow==11.3.0
+portalocker==3.2.0
+pyparsing==3.3.2
 python-dateutil==2.9.0.post0
-scikit-learn==1.9.0
-scipy==1.17.1
+pytz==2026.3.post1
+regex==2026.1.15
 six==1.17.0
 sympy==1.14.0
+tabulate==0.9.0
 threadpoolctl==3.6.0
-torch==2.13.0
-tqdm==4.70.0
 typing_extensions==4.16.0
-certifi==2026.7.22
+tzdata==2026.3
+zipp==3.23.1
