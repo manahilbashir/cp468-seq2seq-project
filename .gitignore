@@ -220,12 +220,18 @@ __marimo__/
 # Local OS junk
 .DS_Store
 
-# Training artifacts (regenerate after Role 1 data lands)
+# Model weights — too large for git. Share results/best_model_inference.pt
+# (24.7 MiB, produced by scripts/export_checkpoint.py) out of band instead.
 results/**/*.pt
+
+# Hyperparameter sweep scratch space
 results/tuning/
-results/training_*.json
-results/training_*.png
 results/tuning_summary.json
-results/evaluation_*.json
-results/test_predictions.json
-results/qualitative_examples.md
+
+# Everything else under results/ is committed on purpose: the training log,
+# curves, history, config, metrics and prediction dumps are all evidence the
+# report and the demo video are built from, and none of them exceeds ~2 MB.
+
+# Internal working notes — kept locally, deliberately not published to the repo
+docs/report-outline.md
+docs/plans/

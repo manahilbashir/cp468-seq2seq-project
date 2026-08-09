@@ -136,7 +136,15 @@ def compute_metrics(results):
     # *sets* (each itself a per-example list), not a per-example list of
     # single-reference lists. With only one reference per example this is
     # a single-element outer list wrapping all reference texts in order.
-    bleu = corpus_bleu(predictions, [reference_texts])
+    #
+    # lowercase=True because the LSTM can only ever emit lowercase -- the
+    # training corpus is lowercased by src/tokenizer.py:clean_text -- while the
+    # references and the LLM outputs keep their original casing. Case-sensitive
+    # BLEU would charge the LSTM for a preprocessing decision rather than for
+    # its predictions. Applied uniformly to all three systems, since this
+    # function scores every one of them. ROUGE is unaffected either way:
+    # rouge_score lowercases internally.
+    bleu = corpus_bleu(predictions, [reference_texts], lowercase=True)
 
     # ROUGE
     scorer = rouge_scorer.RougeScorer(
@@ -162,17 +170,32 @@ def compute_metrics(results):
     }
 
 
+def markdown_cell(text, max_chars=None):
+    """
+    Make a string safe to drop into a markdown table cell.
+
+    Articles average ~240 tokens and can contain '|' and newlines, either of
+    which silently breaks the table when written verbatim.
+    """
+    cell = " ".join(str(text).split()).replace("|", "/")
+    if max_chars is not None and len(cell) > max_chars:
+        cell = cell[:max_chars] + "..."
+    return cell
+
+
 def save_qualitative_examples(results, save_path, num_examples=10):
     """
     Save a side-by-side comparison table of source, reference, and prediction.
     """
     lines = ["# Qualitative Analysis: LSTM Seq2Seq Predictions\n"]
-    lines.append("| # | Source | Reference | Prediction |")
-    lines.append("|---|--------|-----------|------------|")
+    lines.append("| # | Source (truncated) | Reference | Prediction |")
+    lines.append("|---|--------------------|-----------|------------|")
 
     for i, r in enumerate(results[:num_examples]):
         lines.append(
-            f"| {i+1} | {r['source']} | {r['reference']} | {r['prediction']} |"
+            f"| {i+1} | {markdown_cell(r['source'], 150)} "
+            f"| {markdown_cell(r['reference'])} "
+            f"| {markdown_cell(r['prediction'])} |"
         )
 
     with open(save_path, "w", encoding="utf-8") as f:

@@ -1,3 +1,9 @@
+# Defers annotation evaluation so the `int | None` and `list[dict]` hints below
+# parse on Python 3.9, which is what requirements.txt is pinned and verified
+# against. Without this the module raises TypeError at import time, which also
+# breaks compare_results.py -- it imports the prompt templates from here.
+from __future__ import annotations
+
 import argparse
 import json
 import os

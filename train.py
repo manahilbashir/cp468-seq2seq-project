@@ -113,6 +113,18 @@ def parse_arguments():
         default=1.0,
         help="Gradient clipping max norm",
     )
+    parser.add_argument(
+        "--unk-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Loss weight for the <unk> target token. <unk> is ~14%% of "
+            "training headline tokens -- roughly 4x the most frequent real "
+            "token -- so at weight 1.0 the decoder collapses onto emitting "
+            "<unk> at every position. 0.0 removes it from the loss; use 1.0 "
+            "to reproduce that collapse."
+        ),
+    )
 
     # Training utilities
     parser.add_argument(
@@ -225,7 +237,19 @@ def train_epoch(model, dataloader, criterion, optimizer, device, teacher_forcing
 
 def validate_epoch(model, dataloader, criterion, device):
     """
-    Run one validation epoch (no teacher forcing, no gradient updates).
+    Run one validation epoch (teacher forced, no gradient updates).
+
+    Validation is teacher forced so that it measures the same quantity as the
+    training loss and is therefore usable for model selection and early
+    stopping.
+
+    An earlier version ran this free-running (teacher_forcing_ratio=0.0). That
+    measures something else: how well the model continues from its own
+    predictions. Because exposure bias compounds as the decoder grows confident
+    but not yet accurate, that loss rose monotonically from epoch 2 onward even
+    while training loss fell -- early stopping fired at epoch 6 and selected the
+    epoch-1 checkpoint, which emits one constant headline for every article.
+    Preserved for comparison in results/ablation_freerunning_val_loss/.
 
     Returns:
         average_loss: Mean loss across all batches.
@@ -240,12 +264,11 @@ def validate_epoch(model, dataloader, criterion, device):
             target_ids = batch["target_ids"].to(device)
             source_lengths = batch["source_lengths"].to(device)
 
-            # No teacher forcing during validation
             outputs = model(
                 source_ids,
                 source_lengths,
                 target_ids,
-                teacher_forcing_ratio=0.0,
+                teacher_forcing_ratio=1.0,
             )
 
             targets = target_ids[:, 1:]
@@ -348,8 +371,29 @@ def main():
     num_params = model.count_parameters()
     print(f"Model parameters: {num_params:,}")
 
-    # Loss function: ignore padding index
-    criterion = nn.CrossEntropyLoss(ignore_index=target_vocab.pad_id)
+    # Loss function: ignore padding, and down-weight <unk> as a target.
+    #
+    # ignore_index only takes one token, so <unk> is handled with a class
+    # weight vector instead. With reduction="mean" the loss is divided by the
+    # summed weights of the targets, so a zero-weighted class drops out of both
+    # the numerator and the denominator -- equivalent to ignoring it.
+    #
+    # This matters: <unk> is 13.91% of training headline tokens, about 4x the
+    # most frequent real token, so at weight 1.0 predicting <unk> at every
+    # position is the lowest-loss constant policy and the decoder converges
+    # there -- a run at weight 1.0 emitted 310 <unk> against 19 real word
+    # tokens over 40 test articles.
+    loss_weight = torch.ones(len(target_vocab), device=device)
+    loss_weight[target_vocab.unk_id] = args.unk_loss_weight
+
+    criterion = nn.CrossEntropyLoss(
+        weight=loss_weight,
+        ignore_index=target_vocab.pad_id,
+    )
+    print(
+        f"Loss: CrossEntropy(ignore_index=<pad>, "
+        f"<unk> weight={args.unk_loss_weight})"
+    )
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)

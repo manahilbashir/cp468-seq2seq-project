@@ -30,23 +30,49 @@ The goal is not to beat the LLM. It is to measure the gap, understand why it exi
 | Role | Owner | Status | Owns |
 |------|-------|--------|------|
 | 1 · Data pipeline | Manahil | Done | Real dataset (Kaggle News Summary, 2,691 examples), preprocess, vocab, train/val/test |
-| 2 · LSTM seq2seq | Safdar | Code done · final training run pending | `src/model.py`, `train.py`, `scripts/finish_training.py` |
+| 2 · LSTM seq2seq | Safdar | Trained — see caveat below | `src/model.py`, `train.py`, `scripts/finish_training.py` |
 | 3 · LLM baseline | Manahil | Done | `llm_baseline.py`, `results/llm_outputs.jsonl` (Gemini, zero-shot + few-shot) |
-| 4 · Evaluation | Noah | Scripts ready · needs a checkpoint to run against | `evaluate.py`, `compare_results.py` |
-| 5 · Report & video | Farhan | Not started | PDF report + 8-minute demo video — see [docs/report-outline.md](docs/report-outline.md) |
+| 4 · Evaluation | Noah | Scripts ready · checkpoint now available | `evaluate.py`, `compare_results.py` |
+| 5 · Report & video | Farhan | Not started | PDF report + 8-minute demo video |
 
-**Current state.** The data pipeline and the LLM baseline are finished. The LSTM
-implementation, training loop and evaluation scripts are all written and verified
-to run end to end, but the **final training run has not been completed**, so
-`results/best_model.pt` is not yet produced and the LSTM-side metrics do not exist
-yet.
+**Current state.** Data pipeline, LLM baseline and LSTM training are complete.
+The shipped run finished on 2026-08-08: 12 epochs, early-stopped, best
+validation loss **5.0501** at epoch 7, 31.5 minutes on CPU (Apple M4). Artifacts
+are in `results/`.
+
+Checkpoint sanity check over the first 40 test articles: 40/40 distinct
+predictions, 0 empty, mean predicted length 14.2 tokens against a 10.7-token
+reference average. The model conditions on its input; output quality is weak and
+shows repetition loops, which is expected at this data scale and is material for
+the report's error analysis.
+
+Reaching that took two fixes, both in `train.py`, each preserved as a
+reproducible ablation under `results/` with its own README:
+
+| Ablation | Symptom | Fix |
+|---|---|---|
+| `ablation_unk_weight_1.0/` | Decoder emitted `<unk>` everywhere; 34/40 predictions empty after stripping specials | `--unk-loss-weight 0.0` — `<unk>` is 13.91% of training headline tokens, ~4× the most frequent real token, so constant `<unk>` was the lowest-loss constant policy |
+| `ablation_freerunning_val_loss/` | Early stopping selected the epoch-1 checkpoint, which emitted one identical headline for every article | Validation loss is now teacher forced, matching training conditions, so it can rank checkpoints |
 
 **To finish the project, in order:**
 
-1. Run the training command in [step 2 below](#2-train-the-lstm) (~2.5 min/epoch on
-   CPU; a partial 5-epoch run reached validation loss ≈ 5.17).
-2. Run `evaluate.py` and `compare_results.py` ([step 4](#4-evaluate-and-compare)).
-3. Write the report using [docs/report-outline.md](docs/report-outline.md).
+1. Run `evaluate.py` and `compare_results.py` ([step 4](#4-evaluate-and-compare)) — Role 4.
+2. Write the report and record the demo video — Role 5.
+
+### Getting the checkpoint
+
+`results/*.pt` is gitignored, so the checkpoint is **not on GitHub**. For
+handoff, `scripts/export_checkpoint.py` writes an inference-only copy with the
+Adam optimizer state removed — 74.1 MiB → **24.7 MiB**, and a drop-in
+replacement for `--checkpoint` in `evaluate.py`:
+
+```bash
+python scripts/export_checkpoint.py
+```
+
+Share `results/best_model_inference.pt` directly, or un-ignore it (24.7 MiB is
+under GitHub's 50 MB warning threshold). `results/training_curves.png` is also
+gitignored and Role 5 needs it for the report.
 
 ### LLM baseline results (already measured, 270 test examples)
 
@@ -128,11 +154,19 @@ python train.py \
   --teacher-forcing-decay 0.02 \
   --clip-grad 1.0 \
   --patience 5 \
-  --seed 42
+  --seed 42 \
+  --unk-loss-weight 0.0
 ```
 
 Writes `results/best_model.pt`, `training_curves.png`, `training_history.json`
-and `training_config.json`.
+and `training_config.json`. On an Apple M4 CPU this run took **31.5 minutes**
+(~157 s/epoch), early-stopping at epoch 12 with best validation loss 5.0501 at
+epoch 7. Add `| tee results/training_log.txt` to keep the per-epoch record that
+the report needs.
+
+`--unk-loss-weight` defaults to `0.0`, which removes `<unk>` from the loss. Pass
+`1.0` to reproduce the collapse documented in
+`results/ablation_unk_weight_1.0/`.
 
 Optional light hyperparameter search (trains a grid, promotes the best run by
 validation loss):
@@ -192,7 +226,7 @@ evaluate.py                   BLEU / ROUGE + examples (Role 4)
 compare_results.py            LSTM vs LLM comparison + cost (Role 4)
 results/                      Checkpoint, curves, metrics, predictions
 requirements.txt              Pinned dependencies
-docs/plans/                   Optional interactive TUI demo plan
+scripts/export_checkpoint.py  Slim inference-only checkpoint for handoff (Role 2)
 ```
 
 ---

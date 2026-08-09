@@ -1,0 +1,20 @@
+{
+  "data_dir": "data/processed",
+  "results_dir": "results",
+  "embedding_dim": 128,
+  "hidden_dim": 256,
+  "num_layers": 1,
+  "dropout": 0.3,
+  "batch_size": 32,
+  "epochs": 30,
+  "learning_rate": 0.001,
+  "teacher_forcing_ratio": 1.0,
+  "teacher_forcing_decay": 0.02,
+  "clip_grad": 1.0,
+  "patience": 5,
+  "seed": 42,
+  "device": "cpu",
+  "source_vocab_size": 15881,
+  "target_vocab_size": 2527,
+  "model_parameters": 6469599
+}
