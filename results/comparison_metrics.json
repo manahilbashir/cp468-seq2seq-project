@@ -1,0 +1,29 @@
+{
+  "num_examples": 270,
+  "lstm_attention": {
+    "bleu": 0.4371932349351266,
+    "rouge1": 0.08214851824619092,
+    "rouge2": 0.011724511415026067,
+    "rougeL": 0.07805557502344856
+  },
+  "llm_zero_shot": {
+    "bleu": 10.458598023593154,
+    "rouge1": 0.4536239081539468,
+    "rouge2": 0.2049930720763493,
+    "rougeL": 0.3870357143788249
+  },
+  "llm_few_shot": {
+    "bleu": 10.69549356469231,
+    "rouge1": 0.4388121903839635,
+    "rouge2": 0.19443432242388275,
+    "rougeL": 0.37579964945390965
+  },
+  "llm_cost_estimate": {
+    "model": "gemini-3.5-flash-lite",
+    "num_requests": 540,
+    "estimated_prompt_tokens": 234479,
+    "estimated_completion_tokens": 9911,
+    "estimation_method": "~4 chars/token heuristic, not the real Gemini tokenizer -- treat as order-of-magnitude",
+    "note": "Multiply the token counts above by the current gemini-3.5-flash-lite $/1M-token input and output rates from https://ai.google.dev/pricing to get a USD figure for the report (PRD 4.2)."
+  }
+}

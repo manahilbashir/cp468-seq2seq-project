@@ -1,113 +1,93 @@
 # CP468: LSTM vs LLM for Headline Generation
 
-**Course:** CP468 — Artificial Intelligence · Wilfrid Laurier University · Spring 2026  
+**Course:** CP468 — Artificial Intelligence · Wilfrid Laurier University · Spring 2026
 **Team:** Safdar · Farhan · Noah · Manahil · Morad
 
 ---
 
 ## What this project is
 
-We take a **news article** and generate a **short headline**.
+The task: given a **news article**, generate a **one-line headline**.
 
-| | |
-|---|---|
-| **Input** | Article body (many sentences) |
-| **Output** | One concise headline |
+We build two systems for that task and compare them on the same test set:
 
-We build **two systems** on the same task and compare them:
+1. **LSTM seq2seq, written from scratch** — bidirectional LSTM encoder → Bahdanau attention → LSTM decoder, trained only on our dataset
+2. **LLM baseline** — Gemini prompted to write headlines for the same articles
 
-1. **LSTM seq2seq (from scratch)** — bidirectional LSTM encoder → Bahdanau attention → LSTM decoder, trained only on our dataset  
-2. **LLM baseline** — a modern language model (API or local) prompted to write headlines on the **same test set**
+The objective is not to outperform the LLM but to quantify the gap between the two and account for it: model capacity, pretraining, and the trade-offs in cost, latency, control and offline use.
 
-The goal is not to beat the LLM. It is to measure the gap, understand why it exists (capacity, pretraining, attention vs recurrence), and discuss trade-offs (cost, latency, control, offline use).
-
-**Course deliverables:** public GitHub repo · 5-page report · 8-minute demo video
+**Deliverables:** public GitHub repo · 5-page report · 8-minute demo video
 
 ---
 
-## Team roles
+## Team and status
 
-| Role | Owner | Status | Owns |
-|------|-------|--------|------|
-| 1 · Data pipeline | Manahil | Done | Real dataset (Kaggle News Summary, 2,691 examples), preprocess, vocab, train/val/test |
-| 2 · LSTM seq2seq | Safdar | Trained — see caveat below | `src/model.py`, `train.py`, `scripts/finish_training.py` |
-| 3 · LLM baseline | Manahil | Done | `llm_baseline.py`, `results/llm_outputs.jsonl` (Gemini, zero-shot + few-shot) |
-| 4 · Evaluation | Noah | Scripts ready · checkpoint now available | `evaluate.py`, `compare_results.py` |
-| 5 · Report & video | Farhan | Not started | PDF report + 8-minute demo video |
+| Role | Owner | Status | Deliverable |
+|------|-------|--------|-------------|
+| 1 · Data pipeline | Manahil | Complete | `src/preprocess.py`, `data/processed/` |
+| 2 · LSTM seq2seq | Safdar | Complete | `src/model.py`, `train.py`, trained checkpoint |
+| 3 · LLM baseline | Manahil | Complete | `llm_baseline.py`, `results/llm_outputs.jsonl` |
+| 4 · Evaluation | Noah | Complete | `evaluate.py`, `compare_results.py`, metrics below |
+| 5 · Report & video | Farhan | In progress | 5-page PDF report, 8-minute demo video |
 
-**Current state.** Data pipeline, LLM baseline and LSTM training are complete.
-The shipped run finished on 2026-08-08: 12 epochs, early-stopped, best
-validation loss **5.0501** at epoch 7, 31.5 minutes on CPU (Apple M4). Artifacts
-are in `results/`.
+All code is written and has been run. Every figure the report needs is in `results/`.
 
-Checkpoint sanity check over the first 40 test articles: 40/40 distinct
-predictions, 0 empty, mean predicted length 14.2 tokens against a 10.7-token
-reference average. The model conditions on its input; output quality is weak and
-shows repetition loops, which is expected at this data scale and is material for
-the report's error analysis.
+### Training run
 
-Reaching that took two fixes, both in `train.py`, each preserved as a
-reproducible ablation under `results/` with its own README:
+12 epochs with early stopping; best validation loss **5.0501** at epoch 7; 31.5 minutes on an Apple M4 CPU. Curves, logs and configuration are in `results/`.
 
-| Ablation | Symptom | Fix |
+**The model trains successfully but generates low-quality headlines.** Across the first 40 test articles it produced 40 distinct, non-empty predictions, confirming that it conditions on its input rather than emitting a fixed string. The output is nonetheless weak and prone to repetition loops. This is the expected outcome at this data scale: with 2,691 examples, validation loss reached its minimum at epoch 7 and rose thereafter while training loss continued to fall — textbook overfitting. It forms the basis of the report's error analysis.
+
+### Two defects found and fixed during training
+
+Each is preserved as a reproducible ablation under `results/`, with its own README.
+
+| Ablation | Symptom | Resolution |
 |---|---|---|
-| `ablation_unk_weight_1.0/` | Decoder emitted `<unk>` everywhere; 34/40 predictions empty after stripping specials | `--unk-loss-weight 0.0` — `<unk>` is 13.91% of training headline tokens, ~4× the most frequent real token, so constant `<unk>` was the lowest-loss constant policy |
-| `ablation_freerunning_val_loss/` | Early stopping selected the epoch-1 checkpoint, which emitted one identical headline for every article | Validation loss is now teacher forced, matching training conditions, so it can rank checkpoints |
+| `ablation_unk_weight_1.0/` | Decoder emitted `<unk>` almost exclusively; 34 of 40 predictions were empty once special tokens were stripped | `--unk-loss-weight 0.0`. `<unk>` accounted for 13.91% of training headline tokens — roughly 4× the most frequent real word — making a constant `<unk>` prediction the lowest-loss policy available |
+| `ablation_freerunning_val_loss/` | Early stopping selected the epoch-1 checkpoint, which produced one identical headline for every article | Validation loss is now computed with teacher forcing, matching training conditions, so it ranks checkpoints meaningfully |
 
-**To finish the project, in order:**
+### Checkpoint availability
 
-1. Run `evaluate.py` and `compare_results.py` ([step 4](#4-evaluate-and-compare)) — Role 4.
-2. Write the report and record the demo video — Role 5.
+`results/best_model_inference.pt` is committed to the repository — no separate download is required. It is the epoch-7 model with the Adam optimizer state removed (74.1 MiB → 24.7 MiB) and is verified to produce predictions identical to the full checkpoint.
 
-### Getting the checkpoint
-
-**`results/best_model_inference.pt` is committed** — clone the repo and it's
-there, no separate download. It is the shipped epoch-7 model with the Adam
-optimizer state stripped (74.1 MiB → 24.7 MiB) and is verified to produce
-predictions identical to the full checkpoint. Use it directly:
-
-```bash
-python evaluate.py --checkpoint results/best_model_inference.pt --data-dir data/processed --results-dir results
-```
-
-The full `results/best_model.pt` stays out of git; regenerate the slim copy after
-any retrain with `python scripts/export_checkpoint.py`.
-
-### LLM baseline results (already measured, 270 test examples)
-
-| Prompt setting | BLEU (stale) | ROUGE-1 | ROUGE-2 | ROUGE-L |
-|---|---|---|---|---|
-| Gemini zero-shot | 3.85 | 0.4536 | 0.2050 | 0.3870 |
-| Gemini few-shot (k=3) | 2.64 | 0.4388 | 0.1944 | 0.3758 |
-
-> **The BLEU column is out of date.** It was measured case-sensitively.
-> `evaluate.compute_metrics` now scores BLEU with `lowercase=True`, because the
-> LSTM can only emit lowercase (the corpus is lowercased in preprocessing) while
-> references and LLM outputs keep original casing — case-sensitive BLEU charged
-> the LSTM for a preprocessing decision. Re-running `compare_results.py`
-> rescores all three systems from the stored predictions and will move these two
-> BLEU values. ROUGE is unaffected (`rouge_score` lowercases internally). Quote
-> the regenerated `results/comparison_metrics.json`, not this table.
-
-Note that **zero-shot outperforms few-shot** here. The few-shot exemplars in
-`llm_baseline.py` are Western title-case headlines, while this corpus uses a
-terser style, so the examples steer the model away from the reference style.
-Note also that BLEU is very low while ROUGE-1 is reasonable: on ~10-token
-headlines with a single reference, BLEU's brevity penalty and 4-gram precision
-make it largely uninformative. Prefer ROUGE for this task and discuss the
-limitation in the report.
+The full `results/best_model.pt` is excluded from version control. Regenerate the slim copy after any retrain with `python scripts/export_checkpoint.py`.
 
 ---
 
-## LSTM model (Role 2)
+## Final results (270 test examples)
 
-Built with standard PyTorch layers only (`nn.LSTM`, `nn.Embedding`, `nn.Linear`) — no Fairseq / OpenNMT / HuggingFace Seq2SeqTrainer.
+All three systems are scored on the same 270 test examples under the same settings. Source: `results/comparison_metrics.json`.
 
-- **Encoder:** bidirectional LSTM (+ pack/pad)  
-- **Attention:** Bahdanau (additive), padding masked  
-- **Decoder:** unidirectional LSTM with attention each step  
-- **Train:** teacher forcing (optional decay), grad clip, early stopping, checkpointing  
-- **Infer:** greedy decoding  
+| System | BLEU | ROUGE-1 | ROUGE-2 | ROUGE-L |
+|---|---|---|---|---|
+| LSTM + attention | 0.44 | 0.0821 | 0.0117 | 0.0781 |
+| Gemini zero-shot | 10.46 | **0.4536** | **0.2050** | **0.3870** |
+| Gemini few-shot (k=3) | **10.70** | 0.4388 | 0.1944 | 0.3758 |
+
+The gap is large and consistent: the LLM scores roughly **5.5× higher on ROUGE-1** and **24× higher on BLEU**. Measuring and explaining that gap is the object of the project.
+
+**Note on BLEU casing.** BLEU is computed with `lowercase=True` (`evaluate.py:147`). Preprocessing lowercases the corpus (`src/tokenizer.py`) to hold the target vocabulary at 2,527 words — without it, `India` and `india` occupy separate entries and already-sparse counts are split further. The LSTM can therefore only emit lowercase, while the references and Gemini outputs retain normal capitalization, so case-sensitive BLEU penalized the LSTM for a preprocessing decision rather than for prediction quality. ROUGE is unaffected, as `rouge_score` lowercases internally.
+
+### Findings for the report
+
+- **The zero-shot / few-shot ranking depends on the metric.** Few-shot leads narrowly on BLEU (10.70 vs 10.46), while zero-shot leads on all three ROUGE measures. The few-shot exemplars in `llm_baseline.py` use Western title-case phrasing, whereas this corpus is terser, so they steer the model away from the reference style — a shift ROUGE detects through content overlap and BLEU does not. Neither setting is uniformly better.
+- **BLEU is a weak metric for this task.** On ~10-token headlines with a single reference, the brevity penalty and 4-gram precision make it unstable, which is precisely why the two Gemini settings rank differently across metrics. ROUGE should lead the analysis, with this limitation stated.
+- **The LSTM's dominant failure mode is repetition.** For example, from `results/qualitative_comparison.md`: `india ' s son ' s son ' s son ' s son`. Greedy decoding combined with an underfit model settles into high-frequency loops; roughly half the sampled examples exhibit it.
+
+**LLM cost.** 540 requests, approximately 234K prompt tokens and 9.9K completion tokens (`llm_cost_estimate` in the metrics JSON). This uses a 4-characters-per-token heuristic rather than Gemini's tokenizer; multiply by the current rates on [Google's pricing page](https://ai.google.dev/pricing) and present the result as an order-of-magnitude estimate.
+
+---
+
+## LSTM architecture (Role 2)
+
+Standard PyTorch layers only (`nn.LSTM`, `nn.Embedding`, `nn.Linear`) — no Fairseq / OpenNMT / HuggingFace `Seq2SeqTrainer`.
+
+- **Encoder:** bidirectional LSTM (+ pack/pad)
+- **Attention:** Bahdanau (additive), padding masked
+- **Decoder:** unidirectional LSTM, attends each step
+- **Training:** teacher forcing (optional decay), grad clipping, early stopping, checkpointing
+- **Inference:** greedy decoding
 
 ---
 
@@ -123,16 +103,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-`requirements.txt` pins every dependency (including `sacrebleu`, `rouge_score`
-and `certifi`, which the evaluation and LLM scripts import), so no extra
-installs are needed. Verified on Python 3.9 / macOS.
+`requirements.txt` pins everything, including `sacrebleu`, `rouge_score` and `certifi`. Verified on Python 3.9 / macOS.
 
 ---
 
 ## How to run
 
-Run these from the repo root, in order. Steps 1–4 reproduce every number in
-the report.
+Run from the repository root, in order. These four steps reproduce every number reported above.
+
+All four have already been run and their outputs are committed, so this section is for reproduction rather than for completing the project. Step 1 requires the Kaggle dataset and step 3 a Gemini API key; step 2 takes about 31 minutes. Step 4 takes roughly 8 seconds and can be re-run at any time.
 
 ### 1. Preprocess *(Role 1)*
 
@@ -140,10 +119,7 @@ the report.
 python src/preprocess.py
 ```
 
-Reads `data/raw/dataset.csv` and writes `train/validation/test.jsonl`,
-`source_vocab.json`, `target_vocab.json` and `metadata.json` into
-`data/processed/`. Vocabularies are built from the **training split only**,
-so there is no validation/test leakage. Seed is fixed at 42.
+Reads `data/raw/dataset.csv`, writes `train/validation/test.jsonl`, `source_vocab.json`, `target_vocab.json` and `metadata.json` into `data/processed/`. Vocabularies come from the **training split only**, so no val/test leakage. Seed 42.
 
 ### 2. Train the LSTM *(Role 2)*
 
@@ -166,29 +142,19 @@ python train.py \
   --unk-loss-weight 0.0
 ```
 
-Writes `results/best_model.pt`, `training_curves.png`, `training_history.json`
-and `training_config.json`. On an Apple M4 CPU this run took **31.5 minutes**
-(~157 s/epoch), early-stopping at epoch 12 with best validation loss 5.0501 at
-epoch 7. Add `| tee results/training_log.txt` to keep the per-epoch record that
-the report needs.
+Writes `results/best_model.pt`, `training_curves.png`, `training_history.json`, `training_config.json`. ~31.5 min on an Apple M4 CPU (~157 s/epoch). Append `| tee results/training_log.txt` to keep the per-epoch log the report needs.
 
-`--unk-loss-weight` defaults to `0.0`, which removes `<unk>` from the loss. Pass
-`1.0` to reproduce the collapse documented in
-`results/ablation_unk_weight_1.0/`.
+`--unk-loss-weight` defaults to `0.0` (removes `<unk>` from the loss). Pass `1.0` to reproduce the collapse in `results/ablation_unk_weight_1.0/`.
 
-Optional light hyperparameter search (trains a grid, promotes the best run by
-validation loss):
+Optional hyperparameter search — trains a grid, promotes the best run by validation loss:
 
 ```bash
 python scripts/finish_training.py --quick   # 2 configs
-python scripts/finish_training.py           # 4 configs (slow on CPU)
 ```
 
 ### 3. LLM baseline *(Role 3)*
 
-Uses the Gemini API on the **same** `data/processed/test.jsonl`, in two prompt
-settings (zero-shot and 3-example few-shot) as required by PRD §4.2. Both exact
-prompts live at the top of `llm_baseline.py`.
+Gemini on the **same** `data/processed/test.jsonl`, two prompt settings (zero-shot and 3-example few-shot) per PRD §4.2. Both prompts are at the top of `llm_baseline.py`.
 
 ```bash
 export GEMINI_API_KEY=your_key_here
@@ -196,27 +162,23 @@ export GEMINI_API_KEY=your_key_here
 python llm_baseline.py --limit 0     # 0 = full test set
 ```
 
-Writes `results/llm_outputs.jsonl` with one record per test example containing
-the article, reference headline, and both generated headlines.
+Writes `results/llm_outputs.jsonl` — one record per test example with the article, reference headline, and both generated headlines.
 
 ### 4. Evaluate and compare *(Role 4)*
 
-```bash
-# LSTM only: BLEU / ROUGE + qualitative table
-python evaluate.py \
-  --checkpoint results/best_model.pt \
-  --data-dir data/processed \
-  --results-dir results \
-  --num-examples 10
+Approximately 8 seconds total on CPU.
 
-# LSTM vs LLM (zero-shot and few-shot) on the identical test set
+```bash
+python evaluate.py --checkpoint results/best_model_inference.pt --data-dir data/processed --results-dir results --num-examples 10
+```
+
+```bash
 python compare_results.py
 ```
 
-`compare_results.py` writes `results/comparison_metrics.json` (BLEU/ROUGE for
-all three systems plus an LLM token-cost estimate) and
-`results/qualitative_comparison.md` (a side-by-side table spread across the
-article-length distribution, per PRD §4.3).
+`evaluate.py` writes `results/evaluation_metrics.json`, `qualitative_examples.md` and `test_predictions.json` (all 270 LSTM predictions).
+
+`compare_results.py` writes `results/comparison_metrics.json` (BLEU/ROUGE for all three systems plus the LLM token-cost estimate) and `results/qualitative_comparison.md` (side-by-side examples spread across the article-length distribution, per PRD §4.3).
 
 ---
 
@@ -228,41 +190,31 @@ data/processed/               Splits + vocabularies + metadata (Role 1)
 src/preprocess.py             Cleaning, splitting, vocab building (Role 1)
 src/model.py                  LSTM encoder–decoder + attention (Role 2)
 train.py                      Single training run (Role 2)
-scripts/finish_training.py    Train + light hyperparameter grid (Role 2)
-llm_baseline.py               Gemini zero-shot + few-shot baseline (Role 3)
+scripts/finish_training.py    Train + hyperparameter grid (Role 2)
+scripts/export_checkpoint.py  Slim inference-only checkpoint (Role 2)
+llm_baseline.py               Gemini zero-shot + few-shot (Role 3)
 evaluate.py                   BLEU / ROUGE + examples (Role 4)
 compare_results.py            LSTM vs LLM comparison + cost (Role 4)
 results/                      Checkpoint, curves, metrics, predictions
 requirements.txt              Pinned dependencies
-scripts/export_checkpoint.py  Slim inference-only checkpoint for handoff (Role 2)
 ```
 
 ---
 
 ## Reproducibility
 
-- Random seed fixed at **42** in `src/preprocess.py`, `train.py` and
-  `scripts/finish_training.py` (`src/utils.py:set_seed` seeds Python, NumPy and
-  PyTorch).
-- Splits are created before any model development and vocabularies are built
-  from the training split only.
-- All dependencies pinned in `requirements.txt`.
-- Model size, training time and hardware are printed at the end of every
-  training run and stored in `results/training_config.json`.
+- Seed fixed at **42** in `src/preprocess.py`, `train.py` and `scripts/finish_training.py` (`src/utils.py:set_seed` seeds Python, NumPy and PyTorch)
+- Splits created before any model development; vocabularies built from the training split only
+- All dependencies pinned in `requirements.txt`
+- Model size, training time and hardware are printed at the end of every training run and stored in `results/training_config.json`
 
 ---
 
 ## License and attribution
 
-**Dataset.** Kaggle *News Summary* (`sunnysai12345/news-summary`), redistributed
-under the **GPL-2.0** terms stated by its publisher. 4,514 rows of Indian and UK
-news from April–May 2017; copyright in the underlying article text remains with
-the originating publishers (predominantly India Today, Hindustan Times and The
-Guardian). Used here for non-commercial academic coursework only.
+**Dataset.** Kaggle *News Summary* (`sunnysai12345/news-summary`), redistributed under **GPL-2.0** as stated by its publisher. 4,514 rows of Indian and UK news from April–May 2017; copyright in the underlying article text stays with the originating publishers (mainly India Today, Hindustan Times, The Guardian). Non-commercial academic coursework only.
 
-Full provenance, column-level description, licensing notes and the raw →
-processed transformation are documented in **[data/README.md](data/README.md)**.
-Machine-readable equivalents are in `data/processed/metadata.json`.
+Full provenance, column descriptions, licensing notes and the raw → processed transformation are in **[data/README.md](data/README.md)**. Machine-readable version in `data/processed/metadata.json`.
 
 ```
 sunnysai12345. "News Summary." Kaggle, 2018.
