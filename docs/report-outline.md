@@ -3,8 +3,9 @@
 **For:** Farhan (Role 5) · **Contents:** every measured number, exact setting, file
 path and command needed for the 5-page report and the 8-minute video. Data only.
 
-Cells marked `[fill]` come from the training log / Role 4's run and are listed
-with their source in [§9 Where every number lives](#9-where-every-number-lives).
+All measured numbers are filled in. The one remaining `[fill]`, the USD cost,
+needs the current Gemini rate from Google's pricing page. Sources for every
+figure are in [§9 Where every number lives](#9-where-every-number-lives).
 
 ---
 
@@ -416,23 +417,21 @@ Metrics: sacrebleu `corpus_bleu` (BLEU) and `rouge_score.RougeScorer` with
 per example. All three systems scored on the same 270 test examples by
 `compare_results.py`.
 
+Measured 2026-08-08, from `results/comparison_metrics.json`:
+
 | System | BLEU | ROUGE-1 | ROUGE-2 | ROUGE-L |
 |---|---|---|---|---|
-| LSTM + attention | `[fill]` | `[fill]` | `[fill]` | `[fill]` |
-| Gemini zero-shot | `[re-measure]` 3.85 | 0.4536 | 0.2050 | 0.3870 |
-| Gemini few-shot (k=3) | `[re-measure]` 2.64 | 0.4388 | 0.1944 | 0.3758 |
+| LSTM + attention | 0.44 | 0.0821 | 0.0117 | 0.0781 |
+| Gemini zero-shot | 10.46 | **0.4536** | **0.2050** | **0.3870** |
+| Gemini few-shot (k=3) | **10.70** | 0.4388 | 0.1944 | 0.3758 |
 
-> **The two Gemini BLEU figures above are stale.** They were measured with
-> case-sensitive BLEU. `evaluate.compute_metrics` now passes `lowercase=True`,
-> because the LSTM can only emit lowercase — `src/tokenizer.py:clean_text`
-> lowercases the corpus — while the references and the LLM outputs keep their
-> original casing, so case-sensitive BLEU charged the LSTM for a preprocessing
-> decision rather than for its predictions. Re-running `compare_results.py`
-> rescores **all three systems** from the stored predictions, so the Gemini BLEU
-> numbers will move (upward — case normalisation can only add matches). ROUGE is
-> unaffected: `rouge_score` lowercases internally. Quote only the freshly
-> generated `comparison_metrics.json`, never these values or the ones currently
-> in the README table.
+> **Casing note (resolved).** BLEU is computed with `lowercase=True`, because the
+> LSTM can only emit lowercase — `src/tokenizer.py:clean_text` lowercases the
+> corpus — while the references and LLM outputs keep their original casing.
+> Case-sensitive BLEU charged the LSTM for a preprocessing decision rather than
+> for its predictions. The earlier case-sensitive Gemini figures (zero-shot 3.85,
+> few-shot 2.64) are superseded by the table above; do not quote them. ROUGE was
+> never affected — `rouge_score` lowercases internally.
 
 ### Target-vocabulary cutoff sensitivity (measured)
 
@@ -452,12 +451,18 @@ per example. All three systems scored on the same 270 test examples by
 | `ctext` (used) | 4,341 | 412 / 340 / 868 | **2,691 (62.0%)** — 1,649 dropped for exceeding 400 tokens |
 | `text` | 4,514 | 70 / 70 / 81 | **4,514 (100%)** |
 
-Measured ordering fact: zero-shot scores above few-shot on all four metrics.
+Measured ordering fact: the zero-shot / few-shot ranking is **metric-dependent**.
+Few-shot leads on BLEU (10.70 vs 10.46); zero-shot leads on all three ROUGE
+measures. Do not state that either setting is uniformly better. The few-shot
+exemplars in `llm_baseline.py` are Western title-case headlines while this
+corpus is terser, so they steer the model away from the reference style — a
+shift ROUGE registers through content overlap and BLEU does not.
 
-Metric-behaviour fact: BLEU is 3.85 while ROUGE-1 is 0.4536 for the same
-predictions. Outputs average ~11 tokens against a single reference, so BLEU's
-4-gram precision and brevity penalty dominate; ROUGE-1/L reflect the actual
-unigram overlap.
+Metric-behaviour fact: zero-shot BLEU is 10.46 while its ROUGE-1 is 0.4536 for
+the same predictions. Outputs average ~11 tokens against a single reference, so
+BLEU's 4-gram precision and brevity penalty dominate; ROUGE-1/L reflect the
+actual unigram overlap. The metric disagreement above is a direct consequence,
+and is the reason to lead the analysis with ROUGE.
 
 ### LLM cost
 
@@ -466,8 +471,8 @@ From `results/comparison_metrics.json → llm_cost_estimate` (Role 4 run):
 | Field | Value |
 |---|---|
 | Requests | 540 |
-| Estimated prompt tokens | `[fill]` |
-| Estimated completion tokens | `[fill]` |
+| Estimated prompt tokens | 234,479 |
+| Estimated completion tokens | 9,911 |
 | Estimation method | ~4 chars/token heuristic, not the Gemini tokenizer — order of magnitude |
 | USD | `[fill]` — multiply by current input/output rates at https://ai.google.dev/pricing |
 | LSTM cost per request | $0 after training; runs offline on CPU |
@@ -577,8 +582,8 @@ Both load through `evaluate.load_model` unchanged. Regenerate the slim copy with
 | Architecture source | `src/model.py` | yes |
 | Per-epoch training output | `results/training_log.txt` | yes |
 | Loss / perplexity curves | `results/training_curves.png` | yes |
-| Three-system metrics table | `results/comparison_metrics.json` | after Role 4 |
-| Side-by-side examples | `results/qualitative_comparison.md` | after Role 4 |
+| Three-system metrics table | `results/comparison_metrics.json` | yes |
+| Side-by-side examples | `results/qualitative_comparison.md` | yes |
 | Live paste → headline clip | needs `demo.py` | see `plans/tui-headline-demo.md` |
 
 ### 8-minute budget
