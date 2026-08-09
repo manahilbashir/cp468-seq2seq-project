@@ -54,6 +54,9 @@ def load_model(checkpoint_path, source_vocab, target_vocab, device):
         num_layers=config["num_layers"],
         dropout=config["dropout"],
         padding_idx=target_vocab.pad_id,
+        # .get() so checkpoints trained before the ablation flag existed --
+        # including the shipped best_model_inference.pt -- still load.
+        use_attention=not config.get("no_attention", False),
     )
 
     model = Seq2Seq(
@@ -132,7 +135,7 @@ def compute_metrics(results):
     reference_texts = [r["reference"] for r in results]
     predictions = [r["prediction"] for r in results]
 
-    # BLEU — sacrebleu expects references shaped as a list of reference
+    # BLEU - sacrebleu expects references shaped as a list of reference
     # *sets* (each itself a per-example list), not a per-example list of
     # single-reference lists. With only one reference per example this is
     # a single-element outer list wrapping all reference texts in order.

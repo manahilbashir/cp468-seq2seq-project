@@ -4,7 +4,7 @@ Export a slim, inference-only copy of a training checkpoint (Role 2 -> Role 4).
 
 train.py saves the Adam optimizer state alongside the weights so a run can be
 resumed. That state is roughly two extra copies of every parameter and accounts
-for about two thirds of the file — evaluate.py never reads it
+for about two thirds of the file - evaluate.py never reads it
 (evaluate.py:load_model only touches "model_state_dict" and "config").
 
 Stripping it produces a file small enough to share with the rest of the team

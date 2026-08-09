@@ -1,6 +1,6 @@
 # Qualitative Comparison: LSTM vs LLM (zero-shot / few-shot)
 
-Examples are spread across the source-length distribution (shortest to longest article) rather than cherry-picked. `Notes` are automatic heuristic flags only — verify manually and assign the PRD error categories (under-translation, repetition, hallucination, OOV, fluency vs. adequacy) by hand for the report.
+Examples are spread across the source-length distribution (shortest to longest article) rather than cherry-picked. `Notes` are automatic heuristic flags only - verify manually and assign the PRD error categories (under-translation, repetition, hallucination, OOV, fluency vs. adequacy) by hand for the report.
 
 | # | Source (truncated) | Reference | LSTM | LLM Zero-shot | LLM Few-shot | Notes |
 |---|---------------------|-----------|------|----------------|---------------|-------|

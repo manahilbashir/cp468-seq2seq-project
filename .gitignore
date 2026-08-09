@@ -226,7 +226,7 @@ __marimo__/
 # under GitHub's 50 MB warning threshold. Regenerate it with
 # scripts/export_checkpoint.py.
 results/**/*.pt
-!results/best_model_inference.pt
+!results/**/best_model_inference.pt
 
 # Hyperparameter sweep scratch space
 results/tuning/

@@ -22,11 +22,11 @@ Six columns. Only two are used.
 | Column | Description | Used? |
 |---|---|---|
 | `author` | Byline of the summary writer | no |
-| `date` | Publication date, 01 Apr 2017 – 31 May 2017 | no |
-| `headlines` | Short headline — **our target** | **yes** |
+| `date` | Publication date, 01 Apr 2017-31 May 2017 | no |
+| `headlines` | Short headline - **our target** | **yes** |
 | `read_more` | URL of the originating news article | no |
-| `text` | ~70-token summary of the article | no — see note below |
-| `ctext` | Full article body — **our source** | **yes** |
+| `text` | ~70-token summary of the article | no - see note below |
+| `ctext` | Full article body - **our source** | **yes** |
 
 Underlying articles trace back via `read_more` to Indian and UK news outlets,
 predominantly `indiatoday.intoday.in` (3,024), `hindustantimes.com` (1,218) and
@@ -48,7 +48,7 @@ the splits and invalidate the already-measured LLM baseline.
   public repository is what the license permits; it also means downstream reuse
   of the redistributed data inherits GPL-2.0 obligations.
 - GPL-2.0 was written for software, not data. It is what the publisher states,
-  so it is what we cite — but the mismatch between a software license and a
+  so it is what we cite - but the mismatch between a software license and a
   dataset is worth a sentence in the limitations section.
 - The underlying articles are third-party copyrighted news content. The dataset
   redistributes short summaries and headlines rather than full publisher-owned
@@ -56,7 +56,7 @@ the splits and invalidate the already-measured LLM baseline.
 - Personal data: the corpus contains named individuals as ordinary news
   subjects, plus summary-writer bylines in `author`. No special-category
   personal data, and `author` is unused by the pipeline.
-- Provenance is narrow — two months of 2017, India-weighted coverage. Models
+- Provenance is narrow - two months of 2017, India-weighted coverage. Models
   trained on it should not be presented as general-purpose headline generators.
 
 ## Raw → processed
@@ -70,7 +70,7 @@ in `data/processed/`. Steps, in order:
 4. Collapse whitespace, strip, NFKC-normalise, lowercase
 5. Drop duplicate articles
 6. Tokenise on `\w+|[^\w\s]`
-7. Keep articles of 20–400 tokens and headlines of 2–30 tokens
+7. Keep articles of 20-400 tokens and headlines of 2-30 tokens
 8. Split 80/10/10 with `random_state=42`, **before** building any vocabulary
 9. Build source and target vocabularies from the **training split only**,
    minimum frequency 2, maximum size 30,000

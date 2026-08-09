@@ -22,6 +22,19 @@ from llm_baseline import FEW_SHOT_TEMPLATE, MODEL_NAME, ZERO_SHOT_TEMPLATE
 # in the report.
 CHARS_PER_TOKEN_ESTIMATE = 4
 
+# Paid-tier list price for MODEL_NAME, USD per 1M tokens, read from
+# https://ai.google.dev/gemini-api/docs/pricing on 2026-08-08. Override on the
+# command line if the rates have moved since. PRD 4.2 requires a USD figure, so
+# these are applied to the token estimate above to produce one.
+USD_PER_1M_INPUT_TOKENS = 0.30
+USD_PER_1M_OUTPUT_TOKENS = 2.50
+PRICING_RETRIEVED = "2026-08-08"
+
+# Article-length buckets (source tokens) for the PRD's suggested discussion 1:
+# is the LSTM-LLM gap consistent across input lengths? Cut points are the
+# terciles of the test split's article-length distribution.
+NUM_LENGTH_BUCKETS = 3
+
 
 def load_jsonl(path):
     records = []
@@ -70,7 +83,52 @@ def select_diverse_examples(rows, num_examples):
     return [sorted_rows[i] for i in indices]
 
 
-def estimate_llm_cost(llm_results):
+def bucket_by_source_length(rows, num_buckets=NUM_LENGTH_BUCKETS):
+    """
+    Split rows into equal-count buckets ordered by article length, and score
+    all three systems within each bucket.
+
+    Answers the PRD's "is the gap consistent across input lengths?" directly
+    instead of asserting it. Equal-count (quantile) buckets rather than
+    equal-width, so every bucket carries enough examples for the mean to mean
+    something.
+    """
+    ordered = sorted(rows, key=lambda r: r["source_length"])
+    n = len(ordered)
+    buckets = []
+
+    for i in range(num_buckets):
+        start = (i * n) // num_buckets
+        end = ((i + 1) * n) // num_buckets
+        chunk = ordered[start:end]
+
+        if not chunk:
+            continue
+
+        def score(prediction_key):
+            return compute_metrics(
+                [
+                    {"reference": r["reference"], "prediction": r[prediction_key]}
+                    for r in chunk
+                ]
+            )
+
+        buckets.append(
+            {
+                "bucket": f"{i + 1} of {num_buckets}",
+                "num_examples": len(chunk),
+                "source_length_min": chunk[0]["source_length"],
+                "source_length_max": chunk[-1]["source_length"],
+                "lstm_attention": score("lstm_prediction"),
+                "llm_zero_shot": score("llm_zero_shot"),
+                "llm_few_shot": score("llm_few_shot"),
+            }
+        )
+
+    return buckets
+
+
+def estimate_llm_cost(llm_results, usd_per_1m_input, usd_per_1m_output):
     """
     Estimate token volume for the PRD's required LLM cost report (4.2).
     Two requests per example (zero-shot + few-shot), one prompt char count
@@ -96,19 +154,28 @@ def estimate_llm_cost(llm_results):
     prompt_tokens = round(prompt_chars / CHARS_PER_TOKEN_ESTIMATE)
     completion_tokens = round(completion_chars / CHARS_PER_TOKEN_ESTIMATE)
 
+    input_cost = prompt_tokens / 1_000_000 * usd_per_1m_input
+    output_cost = completion_tokens / 1_000_000 * usd_per_1m_output
+
     return {
         "model": MODEL_NAME,
         "num_requests": num_requests,
         "estimated_prompt_tokens": prompt_tokens,
         "estimated_completion_tokens": completion_tokens,
+        "usd_per_1m_input_tokens": usd_per_1m_input,
+        "usd_per_1m_output_tokens": usd_per_1m_output,
+        "pricing_retrieved": PRICING_RETRIEVED,
+        "estimated_input_cost_usd": round(input_cost, 6),
+        "estimated_output_cost_usd": round(output_cost, 6),
+        "estimated_total_cost_usd": round(input_cost + output_cost, 6),
+        "estimated_cost_usd_per_request": round(
+            (input_cost + output_cost) / num_requests, 8
+        ) if num_requests else 0.0,
         "estimation_method": (
             f"~{CHARS_PER_TOKEN_ESTIMATE} chars/token heuristic, not the "
-            "real Gemini tokenizer -- treat as order-of-magnitude"
-        ),
-        "note": (
-            f"Multiply the token counts above by the current {MODEL_NAME} "
-            "$/1M-token input and output rates from https://ai.google.dev/pricing "
-            "to get a USD figure for the report (PRD 4.2)."
+            "real Gemini tokenizer -- treat as order-of-magnitude. Rates are "
+            f"{MODEL_NAME} paid-tier list price retrieved {PRICING_RETRIEVED} "
+            "from https://ai.google.dev/gemini-api/docs/pricing"
         ),
     }
 
@@ -134,7 +201,7 @@ def save_qualitative_table(rows, save_path, num_examples):
         "# Qualitative Comparison: LSTM vs LLM (zero-shot / few-shot)\n",
         "Examples are spread across the source-length distribution "
         "(shortest to longest article) rather than cherry-picked. "
-        "`Notes` are automatic heuristic flags only — verify manually "
+        "`Notes` are automatic heuristic flags only - verify manually "
         "and assign the PRD error categories "
         "(under-translation, repetition, hallucination, OOV, fluency vs. "
         "adequacy) by hand for the report.\n",
@@ -166,6 +233,18 @@ def main():
     parser.add_argument("--llm-outputs", default="results/llm_outputs.jsonl")
     parser.add_argument("--results-dir", default="results")
     parser.add_argument("--num-examples", type=int, default=12)
+    parser.add_argument(
+        "--usd-per-1m-input",
+        type=float,
+        default=USD_PER_1M_INPUT_TOKENS,
+        help=f"{MODEL_NAME} input rate, USD per 1M tokens",
+    )
+    parser.add_argument(
+        "--usd-per-1m-output",
+        type=float,
+        default=USD_PER_1M_OUTPUT_TOKENS,
+        help=f"{MODEL_NAME} output rate, USD per 1M tokens",
+    )
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
@@ -213,12 +292,22 @@ def main():
     ]
     few_shot_metrics = compute_metrics(few_shot_results)
 
+    rows = build_rows(lstm_results, llm_results)
+
+    print("Scoring by article-length bucket...")
+    length_buckets = bucket_by_source_length(rows)
+
     comparison = {
         "num_examples": n,
         "lstm_attention": lstm_metrics,
         "llm_zero_shot": zero_shot_metrics,
         "llm_few_shot": few_shot_metrics,
-        "llm_cost_estimate": estimate_llm_cost(llm_results),
+        "by_source_length": length_buckets,
+        "llm_cost_estimate": estimate_llm_cost(
+            llm_results,
+            usd_per_1m_input=args.usd_per_1m_input,
+            usd_per_1m_output=args.usd_per_1m_output,
+        ),
     }
 
     metrics_path = results_dir / "comparison_metrics.json"
@@ -237,9 +326,28 @@ def main():
                 f"ROUGE-L={metrics['rougeL']:.4f}"
             )
     print(f"{'=' * 60}")
+
+    print("\nROUGE-1 BY ARTICLE LENGTH (equal-count buckets)")
+    print(f"{'bucket':<10}{'articles':<10}{'src tokens':<14}"
+          f"{'LSTM':<10}{'zero-shot':<12}{'few-shot':<10}")
+    for b in length_buckets:
+        span = f"{b['source_length_min']}-{b['source_length_max']}"
+        print(
+            f"{b['bucket']:<10}{b['num_examples']:<10}{span:<14}"
+            f"{b['lstm_attention']['rouge1']:<10.4f}"
+            f"{b['llm_zero_shot']['rouge1']:<12.4f}"
+            f"{b['llm_few_shot']['rouge1']:<10.4f}"
+        )
+
+    cost = comparison["llm_cost_estimate"]
+    print(
+        f"\nLLM COST: ${cost['estimated_total_cost_usd']:.4f} USD total over "
+        f"{cost['num_requests']} requests "
+        f"(${cost['estimated_cost_usd_per_request'] * 1000:.4f} per 1,000 requests)"
+    )
+    print(f"{'=' * 60}")
     print(f"Metrics saved to {metrics_path}")
 
-    rows = build_rows(lstm_results, llm_results)
     save_qualitative_table(rows, results_dir / "qualitative_comparison.md", args.num_examples)
 
 

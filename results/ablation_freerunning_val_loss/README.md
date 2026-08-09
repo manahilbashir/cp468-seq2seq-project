@@ -1,11 +1,10 @@
-# Ablation B — free-running validation loss
+# Ablation B - free-running validation loss
 
 Kept as evidence for the report. **This is not the shipped model.**
 
 `<unk>` was already masked out of the loss here (the fix from ablation A), but
 `validate_epoch` still computed validation loss with
-`teacher_forcing_ratio=0.0` — the decoder conditioning on its own predictions —
-while training loss was teacher forced.
+`teacher_forcing_ratio=0.0` - the decoder conditioning on its own predictions - while training loss was teacher forced.
 
 ## What happened
 
@@ -21,7 +20,7 @@ CPU.
 | 5 | 5.0614 | 6.2485 |
 | 6 | 4.7725 | 6.2747 |
 
-The `<unk>` collapse was gone — 0 of 40 test predictions were empty. But the
+The `<unk>` collapse was gone - 0 of 40 test predictions were empty. But the
 selected epoch-1 checkpoint emits the identical string `delhi to to to to in ' s`
 for every article, because it had barely trained.
 

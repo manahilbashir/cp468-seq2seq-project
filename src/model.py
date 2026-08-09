@@ -45,7 +45,7 @@ class Encoder(nn.Module):
             padding_idx=padding_idx,
         )
 
-        # Bidirectional LSTM — output dim is 2 * hidden_dim
+        # Bidirectional LSTM - output dim is 2 * hidden_dim
         self.lstm = nn.LSTM(
             input_size=embedding_dim,
             hidden_size=hidden_dim,
@@ -96,6 +96,9 @@ class Encoder(nn.Module):
             outputs: (batch_size, src_seq_len, hidden_dim * 2)
             hidden:  (num_layers, batch_size, hidden_dim)
             cell:    (num_layers, batch_size, hidden_dim)
+            final_state: (batch_size, hidden_dim * 2) - top-layer forward and
+                backward final states concatenated, before projection. Used as
+                the constant context vector by the no-attention ablation.
         """
         # (batch_size, src_seq_len, embedding_dim)
         embedded = self.dropout(self.embedding(source_ids))
@@ -116,11 +119,16 @@ class Encoder(nn.Module):
             packed_outputs, batch_first=True
         )
 
+        # Top-layer bidirectional final state, kept before projection so the
+        # no-attention ablation has a context vector of the same width
+        # (hidden_dim * 2) that attention would have produced.
+        final_state = self._combine_directions(hidden)[-1]
+
         # Project bidirectional states to decoder's unidirectional space
         hidden = self.project_hidden(hidden)
         cell = self.project_cell(cell)
 
-        return outputs, hidden, cell
+        return outputs, hidden, cell, final_state
 
 
 class BahdanauAttention(nn.Module):
@@ -141,13 +149,13 @@ class BahdanauAttention(nn.Module):
     def forward(self, decoder_hidden, encoder_outputs, mask):
         """
         Args:
-            decoder_hidden: (batch_size, hidden_dim) — top-layer hidden state.
+            decoder_hidden: (batch_size, hidden_dim) - top-layer hidden state.
             encoder_outputs: (batch_size, src_seq_len, hidden_dim * 2)
-            mask: (batch_size, src_seq_len) — True for real tokens, False for padding.
+            mask: (batch_size, src_seq_len) - True for real tokens, False for padding.
 
         Returns:
-            context: (batch_size, hidden_dim * 2) — weighted sum of encoder outputs.
-            attention_weights: (batch_size, src_seq_len) — softmaxed alignment scores.
+            context: (batch_size, hidden_dim * 2) - weighted sum of encoder outputs.
+            attention_weights: (batch_size, src_seq_len) - softmaxed alignment scores.
         """
         # (batch_size, src_seq_len, hidden_dim)
         wh = self.W_h(encoder_outputs)
@@ -195,12 +203,14 @@ class Decoder(nn.Module):
         num_layers,
         dropout,
         padding_idx,
+        use_attention=True,
     ):
         super().__init__()
 
         self.vocab_size = vocab_size
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
+        self.use_attention = use_attention
 
         self.embedding = nn.Embedding(
             vocab_size,
@@ -217,7 +227,11 @@ class Decoder(nn.Module):
             batch_first=True,
         )
 
-        self.attention = BahdanauAttention(hidden_dim)
+        # The ablation drops the module entirely rather than bypassing it, so
+        # the parameter count reported for the no-attention run is honest.
+        self.attention = (
+            BahdanauAttention(hidden_dim) if use_attention else None
+        )
 
         # Output projection: LSTM hidden + context vector -> vocab logits
         self.output_projection = nn.Linear(
@@ -233,35 +247,44 @@ class Decoder(nn.Module):
         decoder_cell,
         encoder_outputs,
         source_mask,
+        fixed_context=None,
     ):
         """
         Single decoding step.
 
         Args:
-            input_token: (batch_size,) — previous token IDs.
+            input_token: (batch_size,) - previous token IDs.
             decoder_hidden: (num_layers, batch_size, hidden_dim)
             decoder_cell:   (num_layers, batch_size, hidden_dim)
             encoder_outputs: (batch_size, src_seq_len, hidden_dim * 2)
             source_mask: (batch_size, src_seq_len)
+            fixed_context: (batch_size, hidden_dim * 2) - constant context used
+                instead of attention when use_attention is False.
 
         Returns:
-            prediction: (batch_size, vocab_size) — logits for next token.
+            prediction: (batch_size, vocab_size) - logits for next token.
             decoder_hidden: (num_layers, batch_size, hidden_dim)
             decoder_cell:   (num_layers, batch_size, hidden_dim)
-            attention_weights: (batch_size, src_seq_len)
+            attention_weights: (batch_size, src_seq_len), or None when
+                attention is ablated.
         """
         # (batch_size, 1, embedding_dim)
         embedded = self.dropout(
             self.embedding(input_token).unsqueeze(1)
         )
 
-        # Attention using the top-layer hidden state
-        # (batch_size, hidden_dim)
-        top_hidden = decoder_hidden[-1]
+        if self.use_attention:
+            # Attention using the top-layer hidden state
+            # (batch_size, hidden_dim)
+            top_hidden = decoder_hidden[-1]
 
-        context, attention_weights = self.attention(
-            top_hidden, encoder_outputs, source_mask
-        )
+            context, attention_weights = self.attention(
+                top_hidden, encoder_outputs, source_mask
+            )
+        else:
+            # Ablation: every timestep sees the same encoder final state, so
+            # the whole article has to pass through one fixed-width vector.
+            context, attention_weights = fixed_context, None
 
         # (batch_size, 1, hidden_dim * 2)
         context = context.unsqueeze(1)
@@ -325,11 +348,11 @@ class Seq2Seq(nn.Module):
         Args:
             source_ids: (batch_size, src_seq_len)
             source_lengths: (batch_size,)
-            target_ids: (batch_size, tgt_seq_len) — includes <bos> and <eos>
+            target_ids: (batch_size, tgt_seq_len) - includes <bos> and <eos>
             teacher_forcing_ratio: Probability of using ground-truth token vs model prediction.
 
         Returns:
-            outputs: (batch_size, tgt_seq_len - 1, vocab_size) — predictions for each timestep
+            outputs: (batch_size, tgt_seq_len - 1, vocab_size) - predictions for each timestep
                      (excluding <bos> since we predict starting from it).
         """
         batch_size = source_ids.size(0)
@@ -342,7 +365,7 @@ class Seq2Seq(nn.Module):
         ).to(self.device)
 
         # Encode source sequence
-        encoder_outputs, hidden, cell = self.encoder(
+        encoder_outputs, hidden, cell, final_state = self.encoder(
             source_ids, source_lengths
         )
 
@@ -353,7 +376,12 @@ class Seq2Seq(nn.Module):
 
         for t in range(1, tgt_seq_len):
             prediction, hidden, cell, _ = self.decoder(
-                input_token, hidden, cell, encoder_outputs, source_mask
+                input_token,
+                hidden,
+                cell,
+                encoder_outputs,
+                source_mask,
+                fixed_context=final_state,
             )
 
             # Store prediction
@@ -392,7 +420,7 @@ class Seq2Seq(nn.Module):
         batch_size = source_ids.size(0)
 
         with torch.no_grad():
-            encoder_outputs, hidden, cell = self.encoder(
+            encoder_outputs, hidden, cell, final_state = self.encoder(
                 source_ids, source_lengths
             )
 
@@ -412,7 +440,12 @@ class Seq2Seq(nn.Module):
 
             for t in range(max_length):
                 prediction, hidden, cell, attn = self.decoder(
-                    input_token, hidden, cell, encoder_outputs, source_mask
+                    input_token,
+                    hidden,
+                    cell,
+                    encoder_outputs,
+                    source_mask,
+                    fixed_context=final_state,
                 )
 
                 # Get most likely next token
@@ -422,7 +455,8 @@ class Seq2Seq(nn.Module):
                     if not finished[i]:
                         token_id = input_token[i].item()
                         predictions[i].append(token_id)
-                        attention_weights[i].append(attn[i].cpu())
+                        if attn is not None:
+                            attention_weights[i].append(attn[i].cpu())
 
                         if token_id == self.target_eos_id:
                             finished[i] = True

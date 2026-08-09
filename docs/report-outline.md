@@ -29,7 +29,7 @@ Repo checklist (PRD §5.2):
 | Complete implementation | Done | `src/`, `train.py`, `evaluate.py`, `llm_baseline.py`, `compare_results.py` |
 | Pinned dependencies | Done | `requirements.txt`, 41 pins |
 | README with setup + exact commands | Done | `README.md` |
-| Fixed random seeds | Done | 42 — `src/utils.py:set_seed`, seeds Python / NumPy / PyTorch |
+| Fixed random seeds | Done | 42 - `src/utils.py:set_seed`, seeds Python / NumPy / PyTorch |
 
 Reproducibility was verified, not just claimed: re-running `src/preprocess.py`
 from the raw CSV regenerated all six files in `data/processed/` **byte-identical**
@@ -61,11 +61,11 @@ splits). Safe to state as a checked fact in the report.
 | Whitespace | collapse runs of whitespace, strip |
 | Drop empty | empty article or headline removed |
 | Deduplicate | `drop_duplicates` on article text |
-| Article length filter | keep 20–400 tokens (outside range **dropped**, not truncated) |
-| Headline length filter | keep 2–30 tokens |
+| Article length filter | keep 20-400 tokens (outside range **dropped**, not truncated) |
+| Headline length filter | keep 2-30 tokens |
 | Unicode | NFKC normalization |
 | Case | lowercased |
-| Tokenizer | regex `\w+|[^\w\s]` (`src/tokenizer.py:5`) — words and single punctuation marks |
+| Tokenizer | regex `\w+|[^\w\s]` (`src/tokenizer.py:5`) - words and single punctuation marks |
 
 ### Length distribution (tokens, excluding `<bos>`/`<eos>`)
 
@@ -94,7 +94,7 @@ Corpus-wide averages in `metadata.json`: article 243.31, headline 10.85.
 
 ### `<unk>` rates (% of real tokens, specials excluded)
 
-| Split | Article tokens `<unk>` | Headline tokens `<unk>` | Headlines with ≥1 `<unk>` |
+| Split | Article tokens `<unk>` | Headline tokens `<unk>` | Headlines with >=1 `<unk>` |
 |---|---|---|---|
 | train | 2.21% (11,614 / 525,552) | 13.91% (3,251 / 23,380) | 78.0% |
 | validation | 4.78% (3,134 / 65,502) | 21.69% (633 / 2,919) | 93.7% |
@@ -111,28 +111,28 @@ vocabulary.
 
 ## 4. LSTM architecture (`src/model.py`)
 
-Standard PyTorch layers only — `nn.LSTM`, `nn.Embedding`, `nn.Linear`,
+Standard PyTorch layers only - `nn.LSTM`, `nn.Embedding`, `nn.Linear`,
 `nn.Dropout`. No Fairseq / OpenNMT / HuggingFace trainer.
 
 | Stage | Layer | In → Out |
 |---|---|---|
 | Encoder | `nn.Embedding(15881, 128, padding_idx=0)` | ids → 128 |
-| Encoder | `nn.LSTM(128, 256, layers=1, bidirectional=True, batch_first)` | 128 → 512 (2×256) |
-| Encoder | pack/pad (`pack_padded_sequence`, `enforce_sorted=False`) | — |
+| Encoder | `nn.LSTM(128, 256, layers=1, bidirectional=True, batch_first)` | 128 → 512 (2x256) |
+| Encoder | pack/pad (`pack_padded_sequence`, `enforce_sorted=False`) | - |
 | Encoder | `Linear(512, 256)` + `tanh` → decoder h₀ | 512 → 256 |
 | Encoder | `Linear(512, 256)`, no activation → decoder c₀ | 512 → 256 |
 | Attention | Bahdanau additive: `v ᵀ tanh(W_h·h_i + W_s·s_t)` | `W_h` 512→256, `W_s` 256→256, `v` 256→1 |
-| Attention | padding masked with `-inf` before softmax | — |
+| Attention | padding masked with `-inf` before softmax | - |
 | Decoder | `nn.Embedding(2527, 128, padding_idx=0)` | ids → 128 |
 | Decoder | `nn.LSTM(128 + 512, 256, layers=1, batch_first)` | 640 → 256 |
 | Decoder | `Linear(256 + 512, 2527)` | 768 → 2,527 |
-| Inference | greedy decoding, `max_length=60` default | — |
+| Inference | greedy decoding, `max_length=60` default | - |
 
 Attention is recomputed at every decoder timestep from the top-layer hidden
 state; the context vector is concatenated both into the LSTM input and into the
 output projection input.
 
-### Parameter breakdown — 6,469,599 trainable
+### Parameter breakdown - 6,469,599 trainable
 
 | Module | Parameters | Share |
 |---|---|---|
@@ -173,21 +173,26 @@ fp32 weights 24.7 MiB · checkpoint on disk 74.0 MiB (includes Adam optimizer st
 | early-stopping patience | 5 epochs |
 | seed | 42 |
 | device | cpu |
-| `--unk-loss-weight` | 0.0 (run B) / 1.0 (run A) — see ablation below |
+| `--unk-loss-weight` | 0.0 (run B) / 1.0 (run A) - see ablation below |
 
 `<unk>` is excluded from the loss via a class-weight vector rather than
 `ignore_index`, which accepts only one token. With `reduction="mean"` the loss
 divides by the summed weights of the targets, so a zero-weighted class drops out
-of numerator and denominator alike — verified numerically identical to deleting
+of numerator and denominator alike - verified numerically identical to deleting
 those positions, and `--unk-loss-weight 1.0` is numerically identical to the
 original unweighted loss.
 
-Validation loss is computed with `teacher_forcing_ratio=0.0` — free-running,
-the model conditions on its own predictions ([train.py:248](../train.py:248)).
-Training loss uses the decayed teacher-forcing ratio. The two curves therefore
-measure different things and are not directly comparable; validation loss is
-the harder, inference-like number, and it is what checkpoint selection and
-early stopping use.
+Validation loss is computed with `teacher_forcing_ratio=1.0` - teacher forced,
+matching training conditions ([train.py:271](../train.py:271)). Training loss
+uses the decayed teacher-forcing ratio, so the two are close but not identical
+in later epochs.
+
+This is the shipped behaviour and the fix that produced Run C. An earlier
+version validated free-running (`teacher_forcing_ratio=0.0`), which measures a
+different quantity: exposure bias compounds across timesteps, so that loss rose
+from epoch 2 onward even while the model improved, and early stopping selected
+the epoch-1 checkpoint. Preserved in `results/ablation_freerunning_val_loss/`
+and described under Run B below.
 
 ### Hardware
 
@@ -199,7 +204,7 @@ early stopping use.
 | PyTorch | 2.8.0 |
 | Device used | CPU (no CUDA) |
 
-### Run A — `--unk-loss-weight 1.0` (original loss)
+### Run A - `--unk-loss-weight 1.0` (original loss)
 
 Artifacts preserved in `results/ablation_unk_weight_1.0/`.
 
@@ -231,10 +236,10 @@ Per-epoch record:
 | 10 | 3.7914 | 44.32 | 5.2925 | 198.84 | 0.82 | 155.3 | |
 
 Measured facts: training loss falls monotonically across all 10 epochs while
-validation loss stays within 5.17–5.29 and never improves after epoch 5. The
-checkpoint is epoch 5. This run's decoder collapsed onto `<unk>` — see §7.
+validation loss stays within 5.17-5.29 and never improves after epoch 5. The
+checkpoint is epoch 5. This run's decoder collapsed onto `<unk>` - see §7.
 
-### Run B — `<unk>` masked, free-running validation loss
+### Run B - `<unk>` masked, free-running validation loss
 
 Artifacts preserved in `results/ablation_freerunning_val_loss/`.
 
@@ -255,8 +260,7 @@ Artifacts preserved in `results/ablation_freerunning_val_loss/`.
 | 5 | 5.0614 | 6.2485 | |
 | 6 | 4.7725 | 6.2747 | |
 
-Decoding (first 40 test articles): 0/40 empty — the `<unk>` collapse is gone —
-but the selected epoch-1 checkpoint emits the identical string
+Decoding (first 40 test articles): 0/40 empty - the `<unk>` collapse is gone - but the selected epoch-1 checkpoint emits the identical string
 `delhi to to to to in ' s` for every article. Mean predicted length 7.5 tokens.
 
 Diagnosis: validation loss was computed free-running
@@ -264,7 +268,7 @@ Diagnosis: validation loss was computed free-running
 different quantities. Free-running loss rose monotonically from epoch 2 while
 training loss fell, so early stopping selected the least-trained checkpoint.
 
-### Run C — `<unk>` masked, teacher-forced validation loss (shipped)
+### Run C - `<unk>` masked, teacher-forced validation loss (shipped)
 
 `validate_epoch` changed to `teacher_forcing_ratio=1.0` so validation measures
 the same quantity as training and is usable for model selection.
@@ -295,15 +299,15 @@ the same quantity as training and is usable for model selection.
 | 12 | 3.0618 | 21.37 | 5.2149 | 183.99 | 0.78 | 183.8 | |
 
 Validation loss decreases monotonically for 7 epochs, reaches its minimum at
-epoch 7, then rises as training loss keeps falling — a clean overfitting
+epoch 7, then rises as training loss keeps falling - a clean overfitting
 signature with a well-defined model-selection point.
 
-### Shipped checkpoint — decoding behaviour (first 40 test articles, `max_length=30`)
+### Shipped checkpoint - decoding behaviour (first 40 test articles, `max_length=30`)
 
 | Field | Run A | Run B | Run C (shipped) |
 |---|---|---|---|
 | Empty predictions | 34 / 40 | 0 / 40 | **0 / 40** |
-| Distinct predictions | — | **1 / 40** | **40 / 40** |
+| Distinct predictions | - | **1 / 40** | **40 / 40** |
 | Mean predicted length | ~0 | 7.5 | 14.2 |
 | Reference mean length | 10.7 | 10.7 | 10.7 |
 
@@ -337,7 +341,7 @@ Raw series: `results/training_history.json`.
 | Endpoint | `generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` |
 | temperature | 0.2 |
 | maxOutputTokens | 40 |
-| Prompt variants | 2 — zero-shot, few-shot (k=3) |
+| Prompt variants | 2 - zero-shot, few-shot (k=3) |
 | Test examples | 270 (identical `data/processed/test.jsonl` as the LSTM) |
 | Requests | 540 (2 per example) |
 | Delay between requests | 1.0 s |
@@ -426,12 +430,34 @@ Measured 2026-08-08, from `results/comparison_metrics.json`:
 | Gemini few-shot (k=3) | **10.70** | 0.4388 | 0.1944 | 0.3758 |
 
 > **Casing note (resolved).** BLEU is computed with `lowercase=True`, because the
-> LSTM can only emit lowercase — `src/tokenizer.py:clean_text` lowercases the
-> corpus — while the references and LLM outputs keep their original casing.
+> LSTM can only emit lowercase - `src/tokenizer.py:clean_text` lowercases the
+> corpus - while the references and LLM outputs keep their original casing.
 > Case-sensitive BLEU charged the LSTM for a preprocessing decision rather than
 > for its predictions. The earlier case-sensitive Gemini figures (zero-shot 3.85,
 > few-shot 2.64) are superseded by the table above; do not quote them. ROUGE was
-> never affected — `rouge_score` lowercases internally.
+> never affected - `rouge_score` lowercases internally.
+
+### Ablations, scored on the same 270 test examples (PRD 4.3b)
+
+| Run | What changed | BLEU | ROUGE-1 | ROUGE-2 | ROUGE-L |
+|---|---|---|---|---|---|
+| **Shipped** | biLSTM + Bahdanau attention | **0.44** | **0.0821** | **0.0117** | **0.0781** |
+| Ablation A | `<unk>` left in the loss (weight 1.0) | 0.00 | 0.0067 | 0.0006 | 0.0067 |
+| Ablation C | attention removed (`--no-attention`) | `[run it]` | `[run it]` | `[run it]` | `[run it]` |
+
+Ablation A source: `results/ablation_unk_weight_1.0/evaluation_metrics.json`.
+It quantifies the `<unk>` collapse - ROUGE-1 0.0067 against the shipped 0.0821,
+a 12x drop, and BLEU rounds to zero.
+
+Ablation B (free-running validation loss) has **no saved checkpoint**, so it
+cannot be scored without a 14-minute retrain. Report it as a
+model-selection finding from its training curve, not as a metrics row.
+
+Ablation C is the architectural ablation PRD 4.1 implies by mandating
+attention: the decoder receives the encoder's final bidirectional state as a
+constant context at every timestep instead of a per-step attention context.
+Parameter count drops by exactly 197,376 (6,469,599 -> 6,272,223); everything
+else is held identical. Not yet run - see §12.
 
 ### Target-vocabulary cutoff sensitivity (measured)
 
@@ -446,16 +472,16 @@ Measured 2026-08-08, from `results/comparison_metrics.json`:
 `data/raw/dataset.csv` carries 4,514 rows and two candidate article columns.
 `src/preprocess.py:167` matches `ctext` before `text`, so `ctext` is used.
 
-| Article column | Usable after clean+dedup | Article tokens (mean / median / p95) | Survive 20–400 filter |
+| Article column | Usable after clean+dedup | Article tokens (mean / median / p95) | Survive 20-400 filter |
 |---|---|---|---|
-| `ctext` (used) | 4,341 | 412 / 340 / 868 | **2,691 (62.0%)** — 1,649 dropped for exceeding 400 tokens |
+| `ctext` (used) | 4,341 | 412 / 340 / 868 | **2,691 (62.0%)** - 1,649 dropped for exceeding 400 tokens |
 | `text` | 4,514 | 70 / 70 / 81 | **4,514 (100%)** |
 
 Measured ordering fact: the zero-shot / few-shot ranking is **metric-dependent**.
 Few-shot leads on BLEU (10.70 vs 10.46); zero-shot leads on all three ROUGE
 measures. Do not state that either setting is uniformly better. The few-shot
 exemplars in `llm_baseline.py` are Western title-case headlines while this
-corpus is terser, so they steer the model away from the reference style — a
+corpus is terser, so they steer the model away from the reference style - a
 shift ROUGE registers through content overlap and BLEU does not.
 
 Metric-behaviour fact: zero-shot BLEU is 10.46 while its ROUGE-1 is 0.4536 for
@@ -473,13 +499,43 @@ From `results/comparison_metrics.json → llm_cost_estimate` (Role 4 run):
 | Requests | 540 |
 | Estimated prompt tokens | 234,479 |
 | Estimated completion tokens | 9,911 |
-| Estimation method | ~4 chars/token heuristic, not the Gemini tokenizer — order of magnitude |
-| USD | `[fill]` — multiply by current input/output rates at https://ai.google.dev/pricing |
+| Estimation method | ~4 chars/token heuristic, not the Gemini tokenizer - order of magnitude |
+| Rate, input | $0.30 / 1M tokens |
+| Rate, output | $2.50 / 1M tokens |
+| Rates retrieved | 2026-08-08, https://ai.google.dev/gemini-api/docs/pricing |
+| **Total USD** | **$0.0951** ($0.0703 input + $0.0248 output) |
+| Per 1,000 requests | $0.176 |
 | LSTM cost per request | $0 after training; runs offline on CPU |
+| LSTM training cost | 31.5 min on one M4 CPU, one time |
+
+Computed by `compare_results.py`; override the rates with
+`--usd-per-1m-input` / `--usd-per-1m-output` if pricing moves before submission.
+
+Framing for the trade-offs section: the entire LLM baseline cost about **ten
+cents**, which is the honest headline - at this scale the API is effectively
+free and cost is not what would justify the LSTM. The argument for the small
+model has to rest on offline operation, privacy, latency and controllability,
+not on price. Say that rather than inflating the cost case.
+
+### Gap across article lengths (PRD suggested discussion 1)
+
+Equal-count terciles of the test split by article length, ROUGE-1:
+
+| Bucket | Articles | Source tokens | LSTM | Zero-shot | Few-shot |
+|---|---|---|---|---|---|
+| 1 of 3 | 90 | 19-154 | 0.0851 | 0.4899 | 0.4736 |
+| 2 of 3 | 90 | 154-251 | 0.0846 | 0.4318 | 0.4176 |
+| 3 of 3 | 90 | 252-347 | 0.0767 | 0.4392 | 0.4252 |
+
+Measured finding: **the gap is consistent** - roughly 5.8x on the shortest
+bucket and 5.7x on the longest. Both systems degrade slightly with length and
+neither collapses. Do not claim the LSTM breaks down on long inputs; it does
+not, it is uniformly poor. Full numbers under `by_source_length` in
+`results/comparison_metrics.json`.
 
 ### Error-analysis inputs
 
-`results/qualitative_comparison.md` — 12 rows (article / reference / LSTM /
+`results/qualitative_comparison.md` - 12 rows (article / reference / LSTM /
 LLM zero-shot / LLM few-shot / notes), selected by even steps across the
 source-length distribution, not cherry-picked.
 
@@ -489,13 +545,53 @@ Automatic heuristic flags in the `Notes` column, and what triggers them
 | Flag | Trigger |
 |---|---|
 | `LSTM empty output` | prediction is blank after stripping |
-| `LSTM repetition` | ≥3 bigrams and unique bigrams < 70% of total |
-| `LLM zero-shot over-elaborates` | prediction > 3× reference token count |
+| `LSTM repetition` | >=3 bigrams and unique bigrams < 70% of total |
+| `LLM zero-shot over-elaborates` | prediction > 3x reference token count |
 | `LLM zero-shot empty/error` | blank prediction |
 
 These are heuristics, not the PRD's error categories (under-translation,
-repetition, hallucination, OOV, fluency vs. adequacy) — those are assigned by
+repetition, hallucination, OOV, fluency vs. adequacy) - those are assigned by
 hand.
+
+### Measured failure modes, all 270 examples (`scripts/error_analysis.py`)
+
+Source: `results/error_analysis.md` / `.json`. PRD discussion 3 says to verify
+the typical LSTM-vs-LLM failure story against the data rather than assert it.
+Measured over the full test set, not the 12 sampled rows:
+
+| Category | LSTM | Zero-shot | Few-shot |
+|---|---|---|---|
+| Repetition loop (<70% unique bigrams) | **41.5%** (112/270) | 0.0% | 0.0% |
+| Over the prompt's 15-word limit | 24.4% (66/270) | 1.1% (3/270) | **0.0%** |
+| Over 2x reference length | 13.3% (36/270) | 1.1% | 0.0% |
+| Content >=50% absent from the article | **84.8%** (229/270) | 4.1% (11/270) | 5.2% (14/270) |
+| Empty output | 0.0% | 0.0% | 0.0% |
+| Distinct predictions | 251 / 270 | 270 / 270 | 270 / 270 |
+| Mean length (words; references 9.19) | 14.42 | 11.29 | 10.60 |
+
+**What this confirms:** the LSTM repetition claim holds - 41.5% of predictions
+loop, mean repetition score 0.28 against the LLM's 0.00. Over-generation holds
+too: 14.42 words against a 9.19-word reference mean.
+
+**What this refutes, and this is the more interesting finding:** the PRD's
+suggested typical result says LLMs "may hallucinate content, over-elaborate, or
+ignore format instructions." On this data Gemini does essentially none of it.
+Unsupported content 4.1-5.2% against the LSTM's 84.8%; format compliance 1.1%
+violations zero-shot and **zero** few-shot. The report should say so explicitly
+and cite these numbers - reproducing the expected narrative unverified is the
+exact failure the PRD warns against.
+
+**Secondary finding worth a sentence:** few-shot has zero format violations
+where zero-shot has 3, yet few-shot scores *lower* on all three ROUGE measures.
+The exemplars buy format compliance and cost content overlap. That is a clean,
+concrete illustration of prompt design as a trade-off rather than a
+strict improvement.
+
+Caveat to state: "unsupported content" is a surface-overlap proxy - a correct
+synonym or a fair abstraction also trips it - so it ranks candidates for
+inspection rather than proving hallucination. `error_analysis.md` prints sample
+IDs per category for exactly that spot-check. **Someone must eyeball the ~11
+flagged zero-shot cases before the report calls any of them a hallucination.**
 
 Full 270-row predictions: `results/test_predictions.json`.
 
@@ -543,7 +639,7 @@ export GEMINI_API_KEY=...
 | File | Size | On GitHub | Purpose |
 |---|---|---|---|
 | `results/best_model.pt` | 74.1 MiB | no (gitignored) | Full checkpoint incl. Adam state; resumable |
-| `results/best_model_inference.pt` | 24.7 MiB | no (gitignored) | Weights + config only; **verified to produce predictions identical to the full checkpoint on 30/30 test articles**. This is the one to share for evaluation. |
+| `results/best_model_inference.pt` | 24.7 MiB | **yes (committed)** | Weights + config only; **verified to produce predictions identical to the full checkpoint on 30/30 test articles**, and re-verified 270/270 after the attention-ablation refactor. This is the one to share for evaluation. |
 
 Both load through `evaluate.load_model` unchanged. Regenerate the slim copy with
 `python scripts/export_checkpoint.py`.
@@ -565,11 +661,13 @@ Both load through `evaluate.load_model` unchanged. Regenerate the slim copy with
 | Exact prompts | `llm_baseline.py:20` and `:36` |
 | Architecture | `src/model.py` |
 
-`results/*.pt`, `results/training_*.json|png`, `results/evaluation_*.json`,
-`results/test_predictions.json` and `results/qualitative_examples.md` are in
-`.gitignore` — they are not on GitHub. `results/training_log.txt`,
-`results/llm_outputs.jsonl`, `results/comparison_metrics.json` and
-`results/qualitative_comparison.md` are not ignored.
+Only `results/best_model.pt` (the 74 MiB full checkpoint) is withheld from
+GitHub. Everything else under `results/` is committed and verifiable with
+`git ls-files results/` - including `best_model_inference.pt`, which the
+`.gitignore` negation `!results/best_model_inference.pt` deliberately re-admits.
+So the training log, curves, history, config, all metrics files, both
+prediction dumps, the error analysis and both ablation directories are all on
+GitHub.
 
 ---
 
@@ -590,14 +688,14 @@ Both load through `evaluate.load_model` unchanged. Regenerate the slim copy with
 
 | Time | Segment | On screen |
 |---|---|---|
-| 0:00–1:00 | Task + dataset | metadata.json, one article/headline pair |
-| 1:00–2:30 | Architecture | `src/model.py` — encoder, attention, decoder |
-| 2:30–4:00 | Training | `training_log.txt`, `training_curves.png` |
-| 4:00–6:00 | Results | metrics table, side-by-side examples |
-| 6:00–7:30 | Gap analysis + trade-offs | `<unk>` table (§3), cost estimate (§7) |
-| 7:30–8:00 | Limitations + next steps | — |
+| 0:00-1:00 | Task + dataset | metadata.json, one article/headline pair |
+| 1:00-2:30 | Architecture | `src/model.py` - encoder, attention, decoder |
+| 2:30-4:00 | Training | `training_log.txt`, `training_curves.png` |
+| 4:00-6:00 | Results | metrics table, side-by-side examples |
+| 6:00-7:30 | Gap analysis + trade-offs | `<unk>` table (§3), cost estimate (§7) |
+| 7:30-8:00 | Limitations + next steps | - |
 
-An interactive segment is optional and adds no marks — see
+An interactive segment is optional and adds no marks - see
 [plans/tui-headline-demo.md](plans/tui-headline-demo.md) for the tiers and cost.
 
 ---
@@ -614,7 +712,61 @@ An interactive segment is optional and adds no marks — see
 | 4 · Evaluation | Noah | `evaluate.py`, `compare_results.py` |
 | 5 · Report + video | Farhan | report PDF, demo video, `docs/` |
 
-### AI-use disclosure — fields required
+### AI-use disclosure - fields required
 
 Tool and version used · which files or sections it touched · what it produced
 (code, prose, analysis) · how output was verified · what was written unaided.
+
+---
+
+## 12. Work still outstanding
+
+Ordered by how much it costs to close. Everything above this line is measured
+and committed.
+
+| # | Item | Owner | Effort | Blocks a PRD requirement? |
+|---|---|---|---|---|
+| 1 | 5-page report PDF | Farhan | - | **Yes**, §5.1 |
+| 2 | 8-minute demo video | Farhan | - | **Yes**, §5.3 |
+| 3 | Confirm the GitHub repo is public | anyone | 1 min | **Yes**, §5.2 |
+| 4 | Train + score the `--no-attention` ablation | Safdar | ~35 min, unattended | Strengthens §4.3b |
+| 5 | Second zero-shot prompt variant | Manahil | ~20 min, ~$0.05 | Removes a §4.2 reading risk |
+| 6 | Hand-verify the ~11 flagged zero-shot cases | Noah | ~30 min | Needed before calling anything a hallucination |
+
+### 4 · Attention ablation
+
+`train.py --no-attention` is implemented and smoke-tested. The decoder receives
+the encoder's final bidirectional state as a constant context instead of a
+per-step attention context; parameter count drops by exactly 197,376 and
+nothing else changes. Command is in the README under "Ablations". Then:
+
+```bash
+python evaluate.py --checkpoint results/ablation_no_attention/best_model.pt \
+  --data-dir data/processed --results-dir results/ablation_no_attention
+```
+
+Fill the result into the Ablation C row in §7. Report the number honestly
+whichever way it goes - at this data scale attention may well not help much,
+and "attention did not rescue a model this data-starved" is a legitimate and
+interesting finding, not a failed experiment.
+
+### 5 · Second prompt variant
+
+PRD §4.2 asks for two prompt variants "so your comparison is not an artifact of
+one weak prompt", which is arguably separate from the zero-shot/few-shot split
+we already have. Cheapest insurance is a second **zero-shot** prompt that is
+terse and style-matched to this corpus - no persona, no rule list - to test
+whether the title-case-exemplar effect seen in the few-shot results also shows
+up in prompt phrasing. Add it as a third template in `llm_baseline.py`, write
+to a third output field, and score it in `compare_results.py` alongside the
+others. Whole test set costs about five cents.
+
+### 6 · Hallucination spot-check
+
+`results/error_analysis.md` lists sample IDs per category. The
+unsupported-content figure is a surface-overlap proxy - a correct synonym or a
+fair abstraction trips it too. Before the report describes any Gemini output as
+a hallucination, open those rows in `results/llm_outputs.jsonl`, read the
+article, and confirm by hand. If they turn out to be legitimate abstractions,
+say that: it makes the "the expected LLM failures did not occur" finding
+stronger, not weaker.

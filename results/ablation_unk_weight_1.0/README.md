@@ -1,4 +1,4 @@
-# Ablation A — `<unk>` left in the training loss
+# Ablation A - `<unk>` left in the training loss
 
 Kept as evidence for the report. **This is not the shipped model.**
 
@@ -24,7 +24,7 @@ tokens total; 34 of 40 predictions are empty once special tokens are stripped.
 
 ## Why
 
-`<unk>` accounts for 13.91% of all training headline tokens — roughly 4× the
+`<unk>` accounts for 13.91% of all training headline tokens - roughly 4x the
 most frequent real target token (`'` at 3.3%, `to` at 2.9%). Constant `<unk>` is
 therefore the lowest-cross-entropy constant policy available, and with only
 2,152 training examples the model settles there.

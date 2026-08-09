@@ -18,12 +18,92 @@
     "rouge2": 0.19443432242388275,
     "rougeL": 0.37579964945390965
   },
+  "by_source_length": [
+    {
+      "bucket": "1 of 3",
+      "num_examples": 90,
+      "source_length_min": 19,
+      "source_length_max": 154,
+      "lstm_attention": {
+        "bleu": 0.23525282280728174,
+        "rouge1": 0.08512162122338458,
+        "rouge2": 0.014814801164130375,
+        "rougeL": 0.079304189156906
+      },
+      "llm_zero_shot": {
+        "bleu": 14.058583244731988,
+        "rouge1": 0.4899267447755396,
+        "rouge2": 0.24871234026389497,
+        "rougeL": 0.42848224745380986
+      },
+      "llm_few_shot": {
+        "bleu": 12.155699891044685,
+        "rouge1": 0.4736483683827875,
+        "rouge2": 0.21688606533549776,
+        "rougeL": 0.40995485602110543
+      }
+    },
+    {
+      "bucket": "2 of 3",
+      "num_examples": 90,
+      "source_length_min": 154,
+      "source_length_max": 251,
+      "lstm_attention": {
+        "bleu": 0.5343559119878175,
+        "rouge1": 0.08457598368073083,
+        "rouge2": 0.01101058747085579,
+        "rougeL": 0.08136935600041895
+      },
+      "llm_zero_shot": {
+        "bleu": 10.111500781758282,
+        "rouge1": 0.4317630978259146,
+        "rouge2": 0.19265933623002765,
+        "rougeL": 0.3754922339376056
+      },
+      "llm_few_shot": {
+        "bleu": 11.744702819353474,
+        "rouge1": 0.4175506492314496,
+        "rouge2": 0.19356962101577785,
+        "rougeL": 0.36802331598329246
+      }
+    },
+    {
+      "bucket": "3 of 3",
+      "num_examples": 90,
+      "source_length_min": 252,
+      "source_length_max": 347,
+      "lstm_attention": {
+        "bleu": 0.5499360967279109,
+        "rouge1": 0.07674794983445765,
+        "rouge2": 0.009348145610092038,
+        "rougeL": 0.07349317991302108
+      },
+      "llm_zero_shot": {
+        "bleu": 6.648013200247975,
+        "rouge1": 0.43918188186038637,
+        "rouge2": 0.17360753973512524,
+        "rougeL": 0.357132661745059
+      },
+      "llm_few_shot": {
+        "bleu": 7.966925712115668,
+        "rouge1": 0.4252375535376538,
+        "rouge2": 0.17284728092037283,
+        "rougeL": 0.3494207763573313
+      }
+    }
+  ],
   "llm_cost_estimate": {
     "model": "gemini-3.5-flash-lite",
     "num_requests": 540,
     "estimated_prompt_tokens": 234479,
     "estimated_completion_tokens": 9911,
-    "estimation_method": "~4 chars/token heuristic, not the real Gemini tokenizer -- treat as order-of-magnitude",
-    "note": "Multiply the token counts above by the current gemini-3.5-flash-lite $/1M-token input and output rates from https://ai.google.dev/pricing to get a USD figure for the report (PRD 4.2)."
+    "usd_per_1m_input_tokens": 0.3,
+    "usd_per_1m_output_tokens": 2.5,
+    "pricing_retrieved": "2026-08-08",
+    "estimated_input_cost_usd": 0.070344,
+    "estimated_output_cost_usd": 0.024778,
+    "estimated_total_cost_usd": 0.095121,
+    "estimated_cost_usd_per_request": 0.00017615,
+    "estimation_method": "~4 chars/token heuristic, not the real Gemini tokenizer -- treat as order-of-magnitude. Rates are gemini-3.5-flash-lite paid-tier list price retrieved 2026-08-08 from https://ai.google.dev/gemini-api/docs/pricing"
   }
 }

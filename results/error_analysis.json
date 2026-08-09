@@ -1,0 +1,110 @@
+{
+  "systems": [
+    {
+      "system": "LSTM + attention",
+      "num_examples": 270,
+      "empty": 0,
+      "repetitive": 112,
+      "over_length_vs_reference": 36,
+      "over_prompt_word_limit": 66,
+      "high_unsupported_content": 229,
+      "mean_prediction_tokens": 14.42,
+      "mean_reference_tokens": 9.19,
+      "mean_repetition_score": 0.2834,
+      "mean_unsupported_content_rate": 0.7559,
+      "distinct_predictions": 251,
+      "tokens_outside_lstm_target_vocab": 0.0,
+      "sample_ids": {
+        "repetitive": [
+          1,
+          2,
+          12,
+          13,
+          15
+        ],
+        "over_length_vs_reference": [
+          3,
+          13,
+          20,
+          21,
+          40
+        ],
+        "over_prompt_word_limit": [
+          12,
+          13,
+          14,
+          20,
+          21
+        ],
+        "high_unsupported_content": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "system": "Gemini zero-shot",
+      "num_examples": 270,
+      "empty": 0,
+      "repetitive": 0,
+      "over_length_vs_reference": 3,
+      "over_prompt_word_limit": 3,
+      "high_unsupported_content": 11,
+      "mean_prediction_tokens": 11.29,
+      "mean_reference_tokens": 9.19,
+      "mean_repetition_score": 0.0,
+      "mean_unsupported_content_rate": 0.221,
+      "distinct_predictions": 270,
+      "tokens_outside_lstm_target_vocab": 0.3174,
+      "sample_ids": {
+        "over_length_vs_reference": [
+          25,
+          113,
+          161
+        ],
+        "over_prompt_word_limit": [
+          27,
+          93,
+          231
+        ],
+        "high_unsupported_content": [
+          18,
+          20,
+          32,
+          116,
+          145
+        ]
+      }
+    },
+    {
+      "system": "Gemini few-shot",
+      "num_examples": 270,
+      "empty": 0,
+      "repetitive": 0,
+      "over_length_vs_reference": 0,
+      "over_prompt_word_limit": 0,
+      "high_unsupported_content": 14,
+      "mean_prediction_tokens": 10.6,
+      "mean_reference_tokens": 9.19,
+      "mean_repetition_score": 0.0,
+      "mean_unsupported_content_rate": 0.2296,
+      "distinct_predictions": 270,
+      "tokens_outside_lstm_target_vocab": 0.3231,
+      "sample_ids": {
+        "high_unsupported_content": [
+          18,
+          20,
+          25,
+          35,
+          51
+        ]
+      }
+    }
+  ],
+  "reference_oov_token_rate": 0.2356,
+  "references_with_oov": 258,
+  "num_examples": 270
+}
