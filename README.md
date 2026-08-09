@@ -76,10 +76,19 @@ gitignored and Role 5 needs it for the report.
 
 ### LLM baseline results (already measured, 270 test examples)
 
-| Prompt setting | BLEU | ROUGE-1 | ROUGE-2 | ROUGE-L |
+| Prompt setting | BLEU (stale) | ROUGE-1 | ROUGE-2 | ROUGE-L |
 |---|---|---|---|---|
 | Gemini zero-shot | 3.85 | 0.4536 | 0.2050 | 0.3870 |
 | Gemini few-shot (k=3) | 2.64 | 0.4388 | 0.1944 | 0.3758 |
+
+> **The BLEU column is out of date.** It was measured case-sensitively.
+> `evaluate.compute_metrics` now scores BLEU with `lowercase=True`, because the
+> LSTM can only emit lowercase (the corpus is lowercased in preprocessing) while
+> references and LLM outputs keep original casing — case-sensitive BLEU charged
+> the LSTM for a preprocessing decision. Re-running `compare_results.py`
+> rescores all three systems from the stored predictions and will move these two
+> BLEU values. ROUGE is unaffected (`rouge_score` lowercases internally). Quote
+> the regenerated `results/comparison_metrics.json`, not this table.
 
 Note that **zero-shot outperforms few-shot** here. The few-shot exemplars in
 `llm_baseline.py` are Western title-case headlines, while this corpus uses a
