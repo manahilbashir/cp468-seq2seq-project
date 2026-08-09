@@ -220,9 +220,13 @@ __marimo__/
 # Local OS junk
 .DS_Store
 
-# Model weights — too large for git. Share results/best_model_inference.pt
-# (24.7 MiB, produced by scripts/export_checkpoint.py) out of band instead.
+# Model weights. The full checkpoint (74.1 MiB, includes Adam optimizer state)
+# stays out of git; the inference-only export is committed so Roles 4 and 5 can
+# reproduce the reported numbers without a 31-minute retrain. At 24.7 MiB it is
+# under GitHub's 50 MB warning threshold. Regenerate it with
+# scripts/export_checkpoint.py.
 results/**/*.pt
+!results/best_model_inference.pt
 
 # Hyperparameter sweep scratch space
 results/tuning/
@@ -233,5 +237,4 @@ results/tuning_summary.json
 # report and the demo video are built from, and none of them exceeds ~2 MB.
 
 # Internal working notes — kept locally, deliberately not published to the repo
-docs/report-outline.md
 docs/plans/

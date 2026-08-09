@@ -61,18 +61,17 @@ reproducible ablation under `results/` with its own README:
 
 ### Getting the checkpoint
 
-`results/*.pt` is gitignored, so the checkpoint is **not on GitHub**. For
-handoff, `scripts/export_checkpoint.py` writes an inference-only copy with the
-Adam optimizer state removed — 74.1 MiB → **24.7 MiB**, and a drop-in
-replacement for `--checkpoint` in `evaluate.py`:
+**`results/best_model_inference.pt` is committed** — clone the repo and it's
+there, no separate download. It is the shipped epoch-7 model with the Adam
+optimizer state stripped (74.1 MiB → 24.7 MiB) and is verified to produce
+predictions identical to the full checkpoint. Use it directly:
 
 ```bash
-python scripts/export_checkpoint.py
+python evaluate.py --checkpoint results/best_model_inference.pt --data-dir data/processed --results-dir results
 ```
 
-Share `results/best_model_inference.pt` directly, or un-ignore it (24.7 MiB is
-under GitHub's 50 MB warning threshold). `results/training_curves.png` is also
-gitignored and Role 5 needs it for the report.
+The full `results/best_model.pt` stays out of git; regenerate the slim copy after
+any retrain with `python scripts/export_checkpoint.py`.
 
 ### LLM baseline results (already measured, 270 test examples)
 
@@ -253,8 +252,22 @@ scripts/export_checkpoint.py  Slim inference-only checkpoint for handoff (Role 2
 
 ---
 
-## License
+## License and attribution
 
-- **Dataset:** Kaggle *News Summary* (`sunnysai12345/news-summary`), GPL-2.0.
-  See `data/processed/metadata.json` for the source URL and license.
-- **Code:** academic use for CP468
+**Dataset.** Kaggle *News Summary* (`sunnysai12345/news-summary`), redistributed
+under the **GPL-2.0** terms stated by its publisher. 4,514 rows of Indian and UK
+news from April–May 2017; copyright in the underlying article text remains with
+the originating publishers (predominantly India Today, Hindustan Times and The
+Guardian). Used here for non-commercial academic coursework only.
+
+Full provenance, column-level description, licensing notes and the raw →
+processed transformation are documented in **[data/README.md](data/README.md)**.
+Machine-readable equivalents are in `data/processed/metadata.json`.
+
+```
+sunnysai12345. "News Summary." Kaggle, 2018.
+https://www.kaggle.com/datasets/sunnysai12345/news-summary
+Licensed GPL-2.0. Accessed 2026-08-08.
+```
+
+**Code.** Academic use for CP468.
