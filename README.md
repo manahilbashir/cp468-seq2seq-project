@@ -1,7 +1,8 @@
 # LSTM vs LLM for Headline Generation
 
 **CP468 Artificial Intelligence · Wilfrid Laurier University · Spring 2026**
-**Team:** Safdar · Farhan · Noah · Manahil · Morad
+
+**Contributors:** Safdar · Farhan · Noah · Manahil · Morad
 
 A course research project comparing a sequence-to-sequence model built from scratch against a modern pretrained language model on the same task, the same data, and the same metrics.
 
@@ -15,16 +16,14 @@ A course research project comparing a sequence-to-sequence model built from scra
 
 ---
 
-## Research question
+## Research question: How large is the gap?**
 
 Given a news article, generate a one-line headline. We built two systems for that task:
 
 1. **An LSTM encoder-decoder with attention, written from scratch** and trained only on our 2,152-example training split
 2. **A pretrained LLM baseline**, Gemini prompted zero-shot and few-shot on the identical test set
 
-We did not expect the LSTM to win. The point was never to win. The question was: **how large is the gap, where exactly does it come from, and what does each system's failure pattern reveal about how it works?**
 
-That framing matters for how we read our own results. A model scoring ROUGE-1 0.08 is not a useful headline generator, but it is a useful object of study, because every one of its failures is traceable to a specific, measurable cause in the data or the architecture. That is what we set out to document.
 
 ## What we found
 
@@ -54,12 +53,11 @@ Kaggle [News Summary](https://www.kaggle.com/datasets/sunnysai12345/news-summary
 | Source vocabulary | 15,881 |
 | Target vocabulary | 2,527 |
 
-Splits are created with seed 42 **before** any vocabulary is built, and vocabularies come from the training split only, so there is no validation or test leakage. Full provenance, column descriptions and licensing notes are in [data/README.md](data/README.md).
+Splits are created with seed 42 **before** any vocabulary is built, and vocabularies come from the training split only, so there is no validation or test leakage. 
 
 ## Architecture
 
-Standard PyTorch layers only (`nn.LSTM`, `nn.Embedding`, `nn.Linear`). No Fairseq, OpenNMT or HuggingFace `Seq2SeqTrainer`.
-
+Standard PyTorch layers (`nn.LSTM`, `nn.Embedding`, `nn.Linear`)
 ```
 embedding -> bidirectional LSTM encoder -> Bahdanau attention -> LSTM decoder -> output projection
 ```
