@@ -80,7 +80,7 @@ QUICK_GRID = [
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Train + tune LSTM after Role 1 ships real data"
+        description="Train the LSTM across a small hyperparameter grid"
     )
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)

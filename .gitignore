@@ -230,5 +230,10 @@ results/tuning_summary.json
 # curves, history, config, metrics and prediction dumps are all evidence the
 # report and the demo video are built from, and none of them exceeds ~2 MB.
 
-# Internal working notes — kept locally, deliberately not published to the repo
+# Internal working notes, kept locally and deliberately not published
 docs/plans/
+docs/report-outline.md
+
+# Demo video. 151 MB, over GitHub's 100 MB hard limit, and the assignment asks
+# for a link rather than the file. Linked from the README instead.
+docs/*.mp4
