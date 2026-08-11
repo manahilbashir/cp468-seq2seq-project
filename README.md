@@ -67,7 +67,6 @@ embedding -> bidirectional LSTM encoder -> Bahdanau attention -> LSTM decoder ->
 - **Decoder:** unidirectional LSTM, recomputes attention at every timestep
 - **Training:** teacher forcing with optional decay, gradient clipping, early stopping, checkpointing
 - **Inference:** greedy decoding
-- **Ablation switch:** `--no-attention` replaces the per-step context with the encoder's final bidirectional state held constant, the classic recurrent bottleneck. Removes exactly 197,376 parameters and changes nothing else.
 
 **6,469,599 trainable parameters. 31.5 minutes on an Apple M4 CPU.** 12 epochs with early stopping, best validation loss 5.0501 at epoch 7.
 
@@ -186,7 +185,7 @@ python train.py \
   --unk-loss-weight 0.0
 ```
 
-Add `| tee results/training_log.txt` to save the per-epoch log. Pass `--unk-loss-weight 1.0` to reproduce the `<unk>` collapse, or `--no-attention` to train without attention.
+Add `| tee results/training_log.txt` to save the per-epoch log. Pass `--unk-loss-weight 1.0` to reproduce the `<unk>` collapse.
 
 **3. LLM baseline**
 

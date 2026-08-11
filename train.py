@@ -126,17 +126,6 @@ def parse_arguments():
         ),
     )
 
-    parser.add_argument(
-        "--no-attention",
-        action="store_true",
-        help=(
-            "Ablation: remove Bahdanau attention. The decoder then sees the "
-            "encoder's final bidirectional state as a constant context at "
-            "every timestep, so the whole article passes through one "
-            "fixed-width vector. Everything else is held identical."
-        ),
-    )
-
     # Training utilities
     parser.add_argument(
         "--patience",
@@ -368,7 +357,6 @@ def main():
         num_layers=args.num_layers,
         dropout=args.dropout,
         padding_idx=target_vocab.pad_id,
-        use_attention=not args.no_attention,
     )
 
     model = Seq2Seq(
@@ -382,9 +370,6 @@ def main():
 
     num_params = model.count_parameters()
     print(f"Model parameters: {num_params:,}")
-    print(
-        f"Attention: {'disabled (ablation)' if args.no_attention else 'Bahdanau'}"
-    )
 
     # Loss function: ignore padding, and down-weight <unk> as a target.
     #
