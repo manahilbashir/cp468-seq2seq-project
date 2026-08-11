@@ -16,7 +16,7 @@ A course research project comparing a sequence-to-sequence model built from scra
 
 ---
 
-## Research question: How large is the gap?**
+## Research question: How large is the gap?
 
 Given a news article, generate a one-line headline. We built two systems for that task:
 
@@ -57,7 +57,8 @@ Splits are created with seed 42 **before** any vocabulary is built, and vocabula
 
 ## Architecture
 
-Standard PyTorch layers (`nn.LSTM`, `nn.Embedding`, `nn.Linear`)
+Standard PyTorch layers (`nn.LSTM`, `nn.Embedding`, `nn.Linear`). No Fairseq, OpenNMT or HuggingFace `Seq2SeqTrainer`.
+
 ```
 embedding -> bidirectional LSTM encoder -> Bahdanau attention -> LSTM decoder -> output projection
 ```
